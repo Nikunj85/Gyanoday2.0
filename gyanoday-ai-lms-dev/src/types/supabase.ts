@@ -1,0 +1,20 @@
+/**
+ * Supabase Database Types
+ *
+ * To generate these types, run:
+ * npx supabase gen types typescript --project-id YOUR_PROJECT_ID > src/types/supabase.ts
+ *
+ * Or if using local development:
+ * npx supabase gen types typescript --local > src/types/supabase.ts
+ */
+
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
+
+export interface Database {
+  public: {
+    Tables: Record<string, never>
+    Views: Record<string, never>
+    Functions: Record<string, never>
+    Enums: Record<string, never>
+  }
+}
