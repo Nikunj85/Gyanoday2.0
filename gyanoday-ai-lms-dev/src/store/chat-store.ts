@@ -16,6 +16,12 @@ interface ChatActions {
     chapterId: string,
     limit?: number
   ) => { role: 'user' | 'bot'; content: string }[]
+  /**
+   * Appends a text chunk to an existing message's content in place.
+   * Used while a streaming response is arriving, so we don't have to
+   * replace the whole message array on every token.
+   */
+  appendToMessage: (chapterId: string, messageId: string, chunk: string) => void
 }
 
 type ChatStore = ChatState & ChatActions
@@ -61,6 +67,19 @@ const chatStoreCreator: StateCreator<ChatStore> = (set, get) => ({
   getHistory: (chapterId) => {
     return get().histories[chapterId] || []
   },
+
+  appendToMessage: (chapterId, messageId, chunk) =>
+    set((state) => {
+      const currentHistory = state.histories[chapterId] || []
+      return {
+        histories: {
+          ...state.histories,
+          [chapterId]: currentHistory.map((m) =>
+            m.id === messageId ? { ...m, content: m.content + chunk } : m
+          ),
+        },
+      }
+    }),
 
   getRecentContext: (chapterId, limit = 5) => {
     const history = get().histories[chapterId] || []

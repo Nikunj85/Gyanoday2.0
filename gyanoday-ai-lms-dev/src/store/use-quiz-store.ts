@@ -1,10 +1,23 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 
-import { generateChapterMcqs } from '@/app/actions/mcq-actions'
 import { QuizAttemptStats, QuizQuestion } from '@/types/quiz'
 
 import { useUserStore } from './user-store'
+
+function transformQuestion(q: any): QuizQuestion {
+  return {
+    id: q.id.toString(),
+    text: q.question,
+    type: q.answer_type,
+    options: Object.entries(q.options).map(([key, val]) => ({
+      id: key,
+      label: key as string,
+      text: val as string,
+    })),
+    correctAnswerIds: q.correct_options,
+  }
+}
 const clearAllQuizStorage = () => {
   if (typeof window === 'undefined') return
   const keysToRemove: string[] = []
@@ -25,6 +38,10 @@ interface QuizState {
   timeInSeconds: number
   userAnswers: Record<number, string[]>
   isGenerating: boolean
+  // True from when question 1 arrives until the rest have finished
+  // streaming in — lets the UI let the student start immediately while
+  // more questions continue loading in the background.
+  isGeneratingMore: boolean
   generationError: 'quota_exceeded' | 'generic' | null
   chapterId: string | null
   isReviewMode: boolean
@@ -77,6 +94,7 @@ export const useQuizStore = create<QuizState>()(
       timeInSeconds: 5 * 60,
       userAnswers: {},
       isGenerating: false,
+      isGeneratingMore: false,
       generationError: null,
       chapterId: null,
       isReviewMode: false,
@@ -94,6 +112,7 @@ export const useQuizStore = create<QuizState>()(
           chapterId,
           isReviewMode,
           isGenerating: true,
+          isGeneratingMore: false,
           generationError: null,
           startTime: new Date().toISOString(),
           prevStats: isReviewMode
@@ -147,33 +166,94 @@ export const useQuizStore = create<QuizState>()(
         }
 
         try {
-          set({ isGenerating: true })
+          set({ isGenerating: true, isGeneratingMore: true })
           const user = useUserStore.getState().user
-          const response = await generateChapterMcqs(chapterId, user?.id)
-          if (response?.questions) {
-            const transformedQuestions: QuizQuestion[] = response.questions.map((q: any) => ({
-              id: q.id.toString(),
-              text: q.question,
-              type: q.answer_type,
-              options: Object.entries(q.options).map(([key, val]) => ({
-                id: key,
-                label: key as string,
-                text: val as string,
-              })),
-              correctAnswerIds: q.correct_options,
-            }))
-            set({ questions: transformedQuestions })
-            sessionStorage.setItem(storageKey, JSON.stringify(transformedQuestions))
+
+          const response = await fetch('/api/quiz/stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chapterId, userId: user?.id }),
+          })
+
+          if (!response.body) {
+            throw new Error('No response body from quiz generation')
+          }
+
+          const reader = response.body.getReader()
+          const decoder = new TextDecoder()
+          let lineBuffer = ''
+          let sawAnyQuestion = false
+          let streamError: string | null = null
+
+          const processLine = (line: string) => {
+            if (!line.trim()) return
+            let event: any
+            try {
+              event = JSON.parse(line)
+            } catch {
+              return
+            }
+
+            if (event.type === 'question') {
+              const question = transformQuestion(event.data)
+              const current = get().questions
+              // Guard against duplicates if the stream ever redelivers one.
+              if (current.some((q) => q.id === question.id)) return
+
+              const updated = [...current, question]
+              set({ questions: updated })
+
+              // As soon as the FIRST question exists, let the student start —
+              // the rest continue loading in the background instead of
+              // blocking the whole screen.
+              if (!sawAnyQuestion) {
+                sawAnyQuestion = true
+                set({ isGenerating: false })
+              }
+              sessionStorage.setItem(storageKey, JSON.stringify(updated))
+            } else if (event.type === 'done') {
+              // Authoritative final list — reconcile in case ordering or a
+              // dropped chunk left us with a mismatch versus the validated
+              // full result.
+              if (event.data?.questions) {
+                const finalQuestions: QuizQuestion[] = event.data.questions.map(transformQuestion)
+                set({ questions: finalQuestions })
+                sessionStorage.setItem(storageKey, JSON.stringify(finalQuestions))
+              }
+            } else if (event.type === 'error') {
+              streamError = event.message || 'generic'
+            }
+          }
+
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            lineBuffer += decoder.decode(value, { stream: true })
+            const lines = lineBuffer.split('\n')
+            lineBuffer = lines.pop() || ''
+            for (const line of lines) processLine(line)
+          }
+          if (lineBuffer.trim()) processLine(lineBuffer)
+
+          if (streamError && !sawAnyQuestion) {
+            const err = streamError as string
+            if (err.includes('429') || err.toLowerCase().includes('quota')) {
+              set({ generationError: 'quota_exceeded' })
+            } else {
+              set({ generationError: 'generic' })
+            }
           }
         } catch (error: any) {
           console.error('Failed to generate quiz:', error)
-          if (error?.message?.includes('429') || error?.status === 429) {
-            set({ generationError: 'quota_exceeded' })
-          } else {
-            set({ generationError: 'generic' })
+          if (get().questions.length === 0) {
+            if (error?.message?.includes('429') || error?.status === 429) {
+              set({ generationError: 'quota_exceeded' })
+            } else {
+              set({ generationError: 'generic' })
+            }
           }
         } finally {
-          set({ isGenerating: false })
+          set({ isGenerating: false, isGeneratingMore: false })
         }
       },
 
@@ -183,6 +263,7 @@ export const useQuizStore = create<QuizState>()(
           questions,
           userAnswers,
           isReviewMode,
+          isGeneratingMore,
           chapterId,
           timeInSeconds,
           startTime,
@@ -193,6 +274,15 @@ export const useQuizStore = create<QuizState>()(
         set({ userAnswers: updatedAnswers })
 
         if (currentIndex < questions.length - 1) {
+          set({ currentIndex: currentIndex + 1 })
+          return
+        }
+
+        // Reached the last question that's loaded SO FAR — if more are
+        // still streaming in from generation, advance to that (not-yet-
+        // rendered) index anyway; the page shows a brief inline loader
+        // until it arrives, rather than ending the quiz early.
+        if (isGeneratingMore && !isReviewMode) {
           set({ currentIndex: currentIndex + 1 })
           return
         }
@@ -284,6 +374,7 @@ export const useQuizStore = create<QuizState>()(
           timeInSeconds: 5 * 60,
           userAnswers: {},
           isGenerating: false,
+          isGeneratingMore: false,
           generationError: null,
           chapterId: null,
           isReviewMode: false,

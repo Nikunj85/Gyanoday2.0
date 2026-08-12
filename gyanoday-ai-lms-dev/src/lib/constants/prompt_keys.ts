@@ -3,6 +3,7 @@ export enum PromptKeys {
   PROMPT_MCQ_GENERATOR = 'PROMPT_MCQ_GENERATOR',
   TOTAL_QUESTION_PER_TEST = 'TOTAL_QUESTION_PER_TEST',
   PROMPT_CHATBOT_ANSWER = 'PROMPT_CHATBOT_ANSWER',
+  PROMPT_SOCRATIC_TUTOR_SYSTEM = 'PROMPT_SOCRATIC_TUTOR_SYSTEM',
   PROMPT_STUDENT_OVERALL_SUMMARY = 'PROMPT_STUDENT_OVERALL_SUMMARY',
   PROMPT_QUIZ_RESULT_SUMMARY = 'PROMPT_QUIZ_RESULT_SUMMARY',
 }
@@ -15,6 +16,18 @@ export const PromptVariablesMap: Record<PromptKeys, string[]> = {
     'question',
     'language',
     'conversation_history',
+    'student_name',
+  ],
+  // Static per-chapter persona/rules block. Deliberately does NOT include
+  // per-turn variables (question, conversation_history) — it's passed as
+  // the Responses API's `instructions` field, kept identical across every
+  // message in a chapter's conversation, so the provider's prompt caching
+  // can skip re-processing it turn after turn.
+  [PromptKeys.PROMPT_SOCRATIC_TUTOR_SYSTEM]: [
+    'chapter_title',
+    'subject_name',
+    'class_name',
+    'language',
     'student_name',
   ],
   [PromptKeys.PROMPT_STUDENT_OVERALL_SUMMARY]: ['language', 'insight_data', 'student_name'],

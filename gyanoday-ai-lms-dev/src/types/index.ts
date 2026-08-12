@@ -22,6 +22,7 @@ export interface Chapter {
   language: Language
   pdf_url?: string
   file_id?: string
+  vector_store_id?: string
   video_url?: string
   test_count?: number
   created_at: string

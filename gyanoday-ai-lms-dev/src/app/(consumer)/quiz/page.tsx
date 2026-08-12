@@ -103,8 +103,12 @@ function QuizContent() {
   }, [chapter, loadOrGenerateQuiz])
 
   const handleNext = async (selectedIds: string[]) => {
-    // If it's the last question and not review mode, set submitting state
-    const isLastQuestion = currentIndex === questions.length - 1
+    // If it's genuinely the last question (nothing more is still streaming
+    // in) and not review mode, set submitting state. If more questions are
+    // still being generated, storeHandleNext will just advance instead of
+    // finishing the quiz — don't show a submitting spinner for that case.
+    const isLastQuestion =
+      currentIndex === questions.length - 1 && !useQuizStore.getState().isGeneratingMore
     if (isLastQuestion && !isReviewMode) {
       setIsSubmitting(true)
     }
@@ -209,6 +213,21 @@ function QuizContent() {
   }
 
   const currentQuestion = questions[currentIndex]
+
+  // The student reached an index that hasn't streamed in yet (rare — only
+  // happens if they answer faster than the remaining questions generate).
+  // Show a brief inline loader instead of crashing on undefined.
+  if (!currentQuestion) {
+    return (
+      <main className="overflow-hidden pt-4 md:pt-1 md:pb-2 pb-20 bg-background transition-colors duration-300 min-h-screen">
+        <div className="container mx-auto px-4">
+          <MotionWrapper animation="fadeInUp" duration={0.5}>
+            <QuizCardSkeleton />
+          </MotionWrapper>
+        </div>
+      </main>
+    )
+  }
 
   return (
     <main className="overflow-hidden pt-0 md:pt-0 md:pb-2 pb-20 transition-colors duration-300  flex flex-col relative">

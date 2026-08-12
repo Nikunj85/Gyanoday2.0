@@ -35,6 +35,109 @@ export class OpenAIService {
     return this.openai
   }
 
+  /**
+   * Creates an OpenAI vector store containing the given file and waits for
+   * indexing to finish (createAndPoll). This is a one-time cost per chapter
+   * (cached by the caller) — every subsequent question against the chapter
+   * then uses fast retrieval instead of re-reading the whole document.
+   */
+  async createVectorStoreForFile(fileId: string, name: string): Promise<string> {
+    const client = this.getClient()
+    const store = await client.vectorStores.create({ name })
+    await client.vectorStores.fileBatches.createAndPoll(store.id, {
+      file_ids: [fileId],
+    })
+    return store.id
+  }
+
+  /**
+   * Streaming answer using file_search retrieval, with the static
+   * persona/rules kept in `instructions` (separate from the ever-changing
+   * per-turn `input`). Providers cache the static prefix across turns in
+   * the same conversation, cutting reprocessing time/cost — this is why
+   * the persona text must stay byte-identical turn to turn, and only the
+   * question/history goes in `input`.
+   *
+   * Uses gpt-4o-mini by default: a low-latency model variant, appropriate
+   * here since Socratic replies are intentionally short (3-4 sentences),
+   * not long-form generation where the larger model's extra depth matters
+   * most (that's still used for quiz generation).
+   */
+  async *streamAnswerUsingFileSearch(
+    vectorStoreId: string,
+    input: string,
+    options?: { instructions?: string; temperature?: number; model?: string }
+  ): AsyncGenerator<string> {
+    const client = this.getClient()
+    const stream = await client.responses.create({
+      model: options?.model || models.gpt4oMini,
+      stream: true,
+      temperature: options?.temperature ?? 0.2,
+      instructions: options?.instructions,
+      tools: [
+        {
+          type: 'file_search',
+          vector_store_ids: [vectorStoreId],
+          max_num_results: 8,
+        },
+      ],
+      input: [
+        {
+          role: 'user',
+          content: [{ type: 'input_text', text: input }],
+        },
+      ],
+    })
+
+    for await (const event of stream) {
+      if (event.type === 'response.output_text.delta' && 'delta' in event) {
+        yield event.delta as string
+      }
+    }
+  }
+
+  /**
+   * Streaming structured (schema-constrained) generation using file_search
+   * retrieval. Yields raw text deltas as the model produces the JSON —
+   * the caller is responsible for incrementally parsing them (see
+   * IncrementalJsonArrayExtractor) to reveal individual items early, and for
+   * doing a final full parse/validation once the stream completes.
+   */
+  async *streamStructuredUsingFileSearch<T extends z.ZodTypeAny>(
+    vectorStoreId: string,
+    prompt: string,
+    schema: T,
+    schemaName: string
+  ): AsyncGenerator<string> {
+    const client = this.getClient()
+    const stream = await client.responses.create({
+      model: models.gpt4o,
+      stream: true,
+      tools: [
+        {
+          type: 'file_search',
+          vector_store_ids: [vectorStoreId],
+          max_num_results: 8,
+        },
+      ],
+      input: [
+        {
+          role: 'user',
+          content: [{ type: 'input_text', text: prompt }],
+        },
+      ],
+      text: {
+        format: zodTextFormat(schema, schemaName),
+      },
+    })
+
+    for await (const event of stream) {
+      if (event.type === 'response.output_text.delta' && 'delta' in event) {
+        yield event.delta as string
+      }
+    }
+  }
+
   async uploadFile(pdfURL: string): Promise<string> {
     try {
       const client = this.getClient()
@@ -45,6 +148,81 @@ export class OpenAIService {
       return uploadedFile.id
     } catch (error) {
       console.error('Error uploading file to OpenAI:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Streaming variant of generateResultFromFileId.
+   * Yields text chunks as they arrive from OpenAI instead of waiting for the
+   * full response, so the caller can forward each piece to the client
+   * immediately (used for the chat "typed live" effect).
+   */
+  async *streamResultFromFileId(fileId: string, prompt: string): AsyncGenerator<string> {
+    const client = this.getClient()
+    const stream = await client.responses.create({
+      model: models.gpt4o,
+      stream: true,
+      input: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_file',
+              file_id: fileId,
+            },
+            {
+              type: 'input_text',
+              text: prompt,
+            },
+          ],
+        },
+      ],
+    })
+
+    for await (const event of stream) {
+      // The Responses API streaming protocol emits many event types
+      // (response.created, response.output_text.delta, response.completed, ...).
+      // We only care about the incremental text deltas.
+      if (event.type === 'response.output_text.delta' && 'delta' in event) {
+        yield event.delta as string
+      }
+    }
+  }
+
+  /**
+   * Reads an image (as a data URL / base64 string) and asks the model to
+   * transcribe any text visible in it. Used as the AI fallback step for OCR
+   * when the free on-device engine produces low-confidence results.
+   */
+  async extractTextFromImage(imageDataUrl: string): Promise<string> {
+    try {
+      const client = this.getClient()
+      const response = await client.responses.create({
+        model: models.gpt4o,
+        input: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'input_text',
+                text:
+                  'Transcribe exactly the text visible in this image (handwritten or printed). ' +
+                  'Return ONLY the transcribed text, with no extra commentary, no quotes, ' +
+                  'and preserve line breaks and math notation as plain text where possible.',
+              },
+              {
+                type: 'input_image',
+                image_url: imageDataUrl,
+                detail: 'high',
+              },
+            ],
+          },
+        ],
+      })
+      return (response.output_text || '').trim()
+    } catch (error) {
+      console.error('Error extracting text from image via AI OCR fallback:', error)
       throw error
     }
   }
