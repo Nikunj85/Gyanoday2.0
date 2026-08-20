@@ -14,7 +14,7 @@ interface ChapterSidebarProps {
   completedChapterIds: string[]
   chapterProgress?: UserChapterProgress[]
   onChapterSelect: (chapterId: string) => void
-  onToggleCompletion: (chapterId: string) => void
+  onToggleCompletion?: (chapterId: string) => void
   themeColor: string
 }
 

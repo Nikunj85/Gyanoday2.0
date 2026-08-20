@@ -133,6 +133,15 @@ export function AIChatBot() {
           }),
         })
 
+        if (!response.ok) {
+          // A server error (crash, missing env var, etc.) still has a
+          // response body — usually an HTML error page — which must never
+          // be streamed into the chat as if it were a real answer.
+          throw new Error(
+            'Something went wrong generating a response. Please try again in a moment.'
+          )
+        }
+
         if (!response.body) {
           throw new Error(CHATBOT_GENERAL_ERROR)
         }

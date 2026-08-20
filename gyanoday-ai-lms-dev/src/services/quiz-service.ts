@@ -4,16 +4,23 @@ import { QuizAttemptStats } from '@/types/quiz'
 const supabase = createClient()
 
 export const quizService = {
-  async getOrCreateQuiz(chapterId: string, userId: string, numQuestions: number, title?: string) {
-    // 1. Check if quiz exists for this chapter
-    const { data: existingQuiz, error: fetchError } = await supabase
-      .from('quizzes')
-      .select('id')
-      .eq('chapter_id', chapterId)
-      .single()
+  async getOrCreateQuiz(
+    chapterId: string,
+    userId: string,
+    numQuestions: number,
+    title?: string,
+    topic?: string
+  ) {
+    // 1. Check if a quiz already exists for this exact chapter+user+topic
+    // combination. Filtering by topic matters: without it, a topic-quiz and
+    // the full-chapter quiz would collide onto the same row (and once more
+    // than one existed, .single() would start throwing "multiple rows").
+    let query = supabase.from('quizzes').select('id').eq('chapter_id', chapterId).eq('user_id', userId)
+    query = topic ? query.eq('topic', topic) : query.is('topic', null)
 
-    if (fetchError && fetchError.code !== 'PGRST116') {
-      // PGRST116 is "No rows found"
+    const { data: existingQuiz, error: fetchError } = await query.maybeSingle()
+
+    if (fetchError) {
       throw fetchError
     }
 
@@ -28,9 +35,10 @@ export const quizService = {
         {
           chapter_id: chapterId,
           user_id: userId,
-          title: title || 'Chapter Quiz',
+          title: title || (topic ? `${topic} — Practice Quiz` : 'Chapter Quiz'),
           num_questions: numQuestions,
           pass_threshold: 0.6,
+          topic: topic || null,
         },
       ])
       .select('id')
@@ -44,7 +52,8 @@ export const quizService = {
     chapterId: string,
     userId: string,
     stats: QuizAttemptStats,
-    chapterTitle?: string
+    chapterTitle?: string,
+    topic?: string
   ) {
     try {
       // First get the quiz ID (creates it if missing)
@@ -52,7 +61,8 @@ export const quizService = {
         chapterId,
         userId,
         stats.totalQuestions,
-        chapterTitle
+        chapterTitle,
+        topic
       )
 
       // Save the attempt
@@ -80,14 +90,12 @@ export const quizService = {
     }
   },
 
-  async getUserQuizStats(chapterId: string, userId: string) {
+  async getUserQuizStats(chapterId: string, userId: string, topic?: string) {
     try {
-      // 1. Get the quiz ID for this chapter
-      const { data: quiz, error: quizError } = await supabase
-        .from('quizzes')
-        .select('id')
-        .eq('chapter_id', chapterId)
-        .maybeSingle()
+      // 1. Get the quiz ID for this chapter (+topic, if given)
+      let query = supabase.from('quizzes').select('id').eq('chapter_id', chapterId)
+      query = topic ? query.eq('topic', topic) : query.is('topic', null)
+      const { data: quiz, error: quizError } = await query.maybeSingle()
 
       if (quizError) throw quizError
       if (!quiz) return { attempts: 0, avgScore: 0 }

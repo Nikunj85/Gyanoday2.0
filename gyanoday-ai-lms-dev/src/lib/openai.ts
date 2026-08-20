@@ -51,6 +51,13 @@ export class OpenAIService {
   }
 
   /**
+   * Streaming answer using file_search retrieval instead of dumping the
+   * whole document into context. This is the fast path — the model only
+   * pulls in the passages relevant to the question, so it can start
+   * generating output almost immediately instead of first "reading" the
+   * entire chapter PDF on every request.
+   */
+  /**
    * Streaming answer using file_search retrieval, with the static
    * persona/rules kept in `instructions` (separate from the ever-changing
    * per-turn `input`). Providers cache the static prefix across turns in

@@ -10,7 +10,7 @@ import { Subject } from '@/types'
 import { SmartSummaryDialog } from './SmartSummaryDialog'
 
 interface SubjectHeaderProps {
-  subject: Subject
+  subject?: Subject | null
   completedChapters: number
   totalChapters: number
   activeChapterTitle?: string
@@ -19,6 +19,7 @@ interface SubjectHeaderProps {
   themeColor?: string
   onQuizClick?: () => void
   onCompleteClick?: () => void
+  onSummaryClick?: () => void // Added to open summary dialog from parent
 }
 
 export function SubjectHeader({
@@ -31,10 +32,21 @@ export function SubjectHeader({
   themeColor = '#E58B99',
   onQuizClick,
   onCompleteClick,
+  onSummaryClick,
 }: SubjectHeaderProps) {
   const { t } = useTranslation()
   const progress = totalChapters > 0 ? (completedChapters / totalChapters) * 100 : 0
   const [isSummaryOpen, setIsSummaryOpen] = useState(false)
+
+  const subjectName = subject?.name || 'Subject'
+
+  const handleOpenSummary = () => {
+    if (onSummaryClick) {
+      onSummaryClick()
+    } else {
+      setIsSummaryOpen(true)
+    }
+  }
 
   return (
     <header className="w-full relative z-20">
@@ -56,7 +68,6 @@ export function SubjectHeader({
 
             {/* Integrated Progress Bar */}
             <g transform="translate(720, 60)">
-              {/* Track Arc (Background) */}
               <path
                 d="M -110 30 A 110 110 0 0 0 110 30"
                 fill="none"
@@ -65,7 +76,6 @@ export function SubjectHeader({
                 strokeWidth="13"
                 strokeLinecap="round"
               />
-              {/* Progress Arc (Filled part) */}
               {(() => {
                 const radius = 110
                 const totalLength = Math.PI * radius
@@ -107,7 +117,7 @@ export function SubjectHeader({
         {/* Content Overlay */}
         <div className="absolute inset-0 pointer-events-none z-10">
           <div className="max-w-[2000px] mx-auto h-full relative">
-            {/* Left Side: Breadcrumbs and Complete Button */}
+            {/* Left Side */}
             <div className="absolute left-6 xl:left-12 2xl:left-20 top-[5%] flex flex-col gap-2 pointer-events-auto">
               <nav className="flex items-center gap-2 text-white/80 text-[10px] xl:text-xs font-medium">
                 <Link href="/" className="hover:text-white transition-colors">
@@ -118,7 +128,7 @@ export function SubjectHeader({
                   {t('common.my_dashboard')}
                 </Link>
                 <ChevronRight className="w-3 h-3" />
-                <span className="text-subject-header-name font-bold">{subject.name}</span>
+                <span className="text-subject-header-name font-bold">{subjectName}</span>
               </nav>
 
               <button
@@ -143,31 +153,30 @@ export function SubjectHeader({
               </button>
             </div>
 
-            {/* Center: Subject & Chapter Info */}
+            {/* Center Info */}
             <div className="absolute left-1/2 -translate-x-1/2 top-[3%] xl:top-[7%] flex flex-col items-center pointer-events-none text-center z-20 w-full max-w-[900px]">
-              <h1 className="text-black/40 dark:text-white/40 font-black  text-center text-lg xl:text-2xl mb-0.5 xl:mb-1 uppercase tracking-wider drop-shadow-sm pointer-events-auto">
-                {subject.name}
+              <h1 className="text-black/40 dark:text-white/40 font-black text-center text-lg xl:text-2xl mb-0.5 xl:mb-1 uppercase tracking-wider drop-shadow-sm pointer-events-auto">
+                {subjectName}
               </h1>
               <p className="text-white/90 text-center text-sm xl:text-md font-bold px-2 line-clamp-1 uppercase tracking-wide pointer-events-auto">
                 {activeChapterTitle || 'Loading chapter...'}
               </p>
 
-              {/* Fraction inside Progress Bar space */}
               <div className="flex items-center gap-1 xl:gap-2 mt-6 lg:mt-2 2xl:mt-10 pointer-events-auto">
                 <span className="text-xl xl:text-6xl lg:text-5xl font-black text-white">
                   {completedChapters}
                 </span>
-                <span className="text-lg xl:text-5xl lg:text-5xl  font-black text-white/60">/</span>
+                <span className="text-lg xl:text-5xl lg:text-5xl font-black text-white/60">/</span>
                 <span className="text-lg xl:text-5xl lg:text-5xl font-black text-white/60">
                   {totalChapters}
                 </span>
               </div>
             </div>
 
-            {/* Right Side: Smart Summary and Test Time */}
-            <div className="absolute right-6 xl:right-12 2xl:right-20  sm:mt-0 md:mt-2 2xl:mt-8 flex flex-col gap-2 pointer-events-auto z-30">
+            {/* Right Side Buttons */}
+            <div className="absolute right-6 xl:right-12 2xl:right-20 sm:mt-0 md:mt-2 2xl:mt-8 flex flex-col gap-2 pointer-events-auto z-30">
               <button
-                onClick={() => setIsSummaryOpen(true)}
+                onClick={handleOpenSummary}
                 className="border-2 border-white text-white px-6 py-1.5 cursor-pointer rounded-xl font-bold text-xs xl:text-sm hover:bg-white/10 transition-all whitespace-nowrap min-w-[140px]"
               >
                 {t('common.subject_header.smart_summary')}
@@ -196,13 +205,13 @@ export function SubjectHeader({
             <ChevronRight className="w-3 h-3" />
             <Link href="/student-dashboard">{t('common.my_dashboard')}</Link>
             <ChevronRight className="w-3 h-3" />
-            <span className="text-white">{subject.name}</span>
+            <span className="text-white">{subjectName}</span>
           </nav>
 
           <div className="flex justify-between items-center">
             <div className="flex-1">
               <h2 className="text-white font-extrabold text-base leading-tight uppercase">
-                {subject.name}
+                {subjectName}
               </h2>
               <p className="text-white/80 text-[10px] font-medium line-clamp-1">
                 {activeChapterTitle}
@@ -240,7 +249,7 @@ export function SubjectHeader({
             </button>
             <div className="flex gap-2 w-full max-w-[320px]">
               <button
-                onClick={() => setIsSummaryOpen(true)}
+                onClick={handleOpenSummary}
                 className="flex-1 bg-white/20 text-white py-2 cursor-pointer rounded-lg text-[10px] font-black uppercase tracking-wider border border-white/30"
               >
                 {t('common.subject_header.summary')}
@@ -258,7 +267,7 @@ export function SubjectHeader({
         </div>
       </div>
 
-      {/* Smart Summary Dialog */}
+      {/* Smart Summary Dialog (Fallback if no external state is controlled) */}
       <SmartSummaryDialog
         isOpen={isSummaryOpen}
         onClose={() => setIsSummaryOpen(false)}

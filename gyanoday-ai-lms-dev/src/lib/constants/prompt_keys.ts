@@ -4,13 +4,19 @@ export enum PromptKeys {
   TOTAL_QUESTION_PER_TEST = 'TOTAL_QUESTION_PER_TEST',
   PROMPT_CHATBOT_ANSWER = 'PROMPT_CHATBOT_ANSWER',
   PROMPT_SOCRATIC_TUTOR_SYSTEM = 'PROMPT_SOCRATIC_TUTOR_SYSTEM',
+  PROMPT_SMART_NOTES_GENERATOR = 'PROMPT_SMART_NOTES_GENERATOR',
   PROMPT_STUDENT_OVERALL_SUMMARY = 'PROMPT_STUDENT_OVERALL_SUMMARY',
   PROMPT_QUIZ_RESULT_SUMMARY = 'PROMPT_QUIZ_RESULT_SUMMARY',
 }
 
 export const PromptVariablesMap: Record<PromptKeys, string[]> = {
   [PromptKeys.PROMPT_CHAPTER_SHORT_SUMMARY]: ['language'],
-  [PromptKeys.PROMPT_MCQ_GENERATOR]: ['language', 'student_profile', 'total_questions'],
+  [PromptKeys.PROMPT_MCQ_GENERATOR]: [
+    'language',
+    'student_profile',
+    'total_questions',
+    'topic_focus',
+  ],
   [PromptKeys.TOTAL_QUESTION_PER_TEST]: ['language', 'student_profile'],
   [PromptKeys.PROMPT_CHATBOT_ANSWER]: [
     'question',
@@ -31,6 +37,7 @@ export const PromptVariablesMap: Record<PromptKeys, string[]> = {
     'student_name',
   ],
   [PromptKeys.PROMPT_STUDENT_OVERALL_SUMMARY]: ['language', 'insight_data', 'student_name'],
+  [PromptKeys.PROMPT_SMART_NOTES_GENERATOR]: ['language', 'chapter_title'],
   [PromptKeys.PROMPT_QUIZ_RESULT_SUMMARY]: [
     'class_name',
     'subject',

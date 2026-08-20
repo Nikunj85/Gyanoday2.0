@@ -1,4 +1,5 @@
 import { Language } from './users'
+import { SmartNotes } from './smartnotes'
 
 export interface Class {
   id: string
@@ -20,11 +21,13 @@ export interface Chapter {
   order_num: number
   is_visible: boolean
   language: Language
+  file_url?: string; 
   pdf_url?: string
   file_id?: string
   vector_store_id?: string
   video_url?: string
   test_count?: number
+  smart_notes?: SmartNotes | null
   created_at: string
   updated_at: string
   subject?: { name: string }

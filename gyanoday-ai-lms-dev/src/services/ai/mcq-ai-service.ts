@@ -34,12 +34,19 @@ async function buildStudentProfile(userId: string | undefined, chapterId: string
   }
 }
 
+function buildTopicFocus(topic?: string): string {
+  if (!topic || !topic.trim()) {
+    return 'Cover the entire chapter comprehensively, spreading questions across all its major sections.'
+  }
+  return `Focus specifically on this topic/concept only: "${topic.trim()}". Every question must relate directly to it — do not include questions from unrelated parts of the chapter.`
+}
+
 export const mcqAiService = {
   /**
    * Legacy, non-streaming generation. Kept as a fallback in case the
    * streaming/vector-store path errors out.
    */
-  async generateMcqsFromPdfUrl(chapterId: string, userId?: string) {
+  async generateMcqsFromPdfUrl(chapterId: string, userId?: string, topic?: string) {
     const [fileId, chapter] = await Promise.all([
       chapterServerService.getOrUploadChapterFileId(chapterId),
       chapterServerService.getChapterById(chapterId),
@@ -59,6 +66,7 @@ export const mcqAiService = {
       language: chapter.language || 'English',
       student_profile: studentProfile,
       total_questions: questionCountSetting?.value || '10',
+      topic_focus: buildTopicFocus(topic),
     }
 
     const prompt = buildPrompt(PromptKeys.PROMPT_MCQ_GENERATOR, promptSetting.value, variables)
@@ -78,10 +86,17 @@ export const mcqAiService = {
    * still being written — instead of a blank screen until everything is
    * ready. Yields a final 'done' event with the authoritative, schema-
    * validated full result once the stream completes.
+   *
+   * `topic` (optional) narrows generation to a single concept/topic within
+   * the chapter, for targeted practice — see chapter-server-service's
+   * quizzes.topic column and the unique index on
+   * (chapter_id, user_id, topic), which keeps a topic-quiz as a distinct
+   * quiz row from the full-chapter quiz.
    */
   async *streamMcqsFromPdfUrl(
     chapterId: string,
-    userId?: string
+    userId?: string,
+    topic?: string
   ): AsyncGenerator<
     | { type: 'question'; data: unknown }
     | { type: 'done'; data: unknown }
@@ -106,6 +121,7 @@ export const mcqAiService = {
         language: chapter.language || 'English',
         student_profile: studentProfile,
         total_questions: questionCountSetting?.value || '10',
+        topic_focus: buildTopicFocus(topic),
       }
 
       const prompt = buildPrompt(PromptKeys.PROMPT_MCQ_GENERATOR, promptSetting.value, variables)
@@ -148,7 +164,7 @@ export const mcqAiService = {
         return
       }
 
-      yield { type: 'done', data: validated.data }
+      yield { type: 'done', data: { ...validated.data, topic: topic || null } }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to generate the quiz.'
       yield { type: 'error', message }

@@ -121,7 +121,8 @@ function QuizContent() {
             chapterId,
             user.id,
             stats,
-            chapter?.title
+            chapter?.title,
+            useQuizStore.getState().topic || undefined
           )
           if (attempt?.id) {
             useQuizStore.getState().setLastAttemptId(attempt.id)
@@ -132,7 +133,7 @@ function QuizContent() {
       }
 
       isNavigatingRef.current = true
-      router.replace(`/quiz/result`)
+      router.replace(`/result`)
     })
   }
 

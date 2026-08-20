@@ -7,6 +7,7 @@ export const runtime = 'nodejs'
 interface QuizStreamRequestBody {
   chapterId: string
   userId?: string
+  topic?: string
 }
 
 /**
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest) {
     return new Response('Invalid request body', { status: 400 })
   }
 
-  const { chapterId, userId } = body
+  const { chapterId, userId, topic } = body
 
   if (!chapterId) {
     return new Response('chapterId is required', { status: 400 })
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        for await (const event of mcqAiService.streamMcqsFromPdfUrl(chapterId, userId)) {
+        for await (const event of mcqAiService.streamMcqsFromPdfUrl(chapterId, userId, topic)) {
           controller.enqueue(encoder.encode(JSON.stringify(event) + '\n'))
         }
       } catch (error) {

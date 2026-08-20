@@ -1,10 +1,13 @@
 'use client'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2 } from 'lucide-react'
+import { BookOpen, FileText, Loader2, Sparkles, X, Brain } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
+import { generateAndSaveSmartNotes } from '@/app/actions/smart-notes-actions'
+import { SmartNotesRenderer } from '@/components/common/SmartNotesRenderer'
+import { TopicQuizLauncher } from '@/components/common/TopicQuizLauncher'
 import { Button } from '@/components/ui/button'
 import { MotionContainer, MotionWrapper } from '@/lib/animations/MotionWrapper'
 import { chapterService } from '@/services/chapter-service'
@@ -24,7 +27,12 @@ export default function SubjectDetailPage() {
   const router = useRouter()
   const { user } = useUserStore()
   const queryClient = useQueryClient()
+
   const [activeChapterId, setActiveChapterId] = useState<string | null>(null)
+  const [contentView, setContentView] = useState<'pdf' | 'smart-notes'>('pdf')
+  const [isSummaryOpen, setIsSummaryOpen] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
+
   const { setActiveChapter: setStoreActiveChapter, setActiveSubjectColor } = useChapterStore()
   const { initQuiz } = useQuizStore()
 
@@ -34,7 +42,7 @@ export default function SubjectDetailPage() {
     queryFn: () => subjectService.getById(subjectId),
   })
 
-  // Fetch Chapters filtered by user's class and visibility
+  // Fetch Chapters
   const { data: chaptersData, isLoading: isChaptersLoading } = useQuery({
     queryKey: ['chapters', subjectId, user?.class_id],
     queryFn: () =>
@@ -72,91 +80,47 @@ export default function SubjectDetailPage() {
   const completedChapterIds =
     progressData?.filter((p) => p.is_completed).map((p) => p.chapter_id) || []
 
-  // and we want to avoid complex type gymnastics for now.
-  const allChapterProgress: any[] = chapters.map((c) => {
-    const existing = progressData?.find((p) => p.chapter_id === c.id)
-    const testCount = attemptsData?.[c.id] || 0
-
-    if (existing) {
-      return {
-        ...existing,
-        test_count: testCount,
-      }
-    }
-
-    return {
-      id: `temp-${c.id}`,
-      user_id: user?.id || '',
-      chapter_id: c.id,
-      is_completed: false,
-      test_count: testCount,
-    }
-  })
+  const activeChapter = chapters.find((c) => c.id === activeChapterId) || null
+  const themeColor = subject?.color_code || '#B188C0'
 
   // Auto-select first chapter
   useEffect(() => {
     if (chapters.length > 0 && !activeChapterId) {
-      // Find first incomplete chapter, or just the first one
       const firstIncomplete = chapters.find((c) => !completedChapterIds.includes(c.id))
       setActiveChapterId(firstIncomplete?.id || chapters[0].id)
     }
   }, [chapters, completedChapterIds, activeChapterId])
 
-  const activeChapter = chapters.find((c) => c.id === activeChapterId) || null
-  const themeColor = subject?.color_code || '#B188C0'
-
-  // Sync active chapter and color with store for AIChatBot
+  // Reset tab when active chapter changes
   useEffect(() => {
-    setStoreActiveChapter(activeChapter)
-    setActiveSubjectColor(themeColor)
+    setContentView('pdf')
+    setIsSummaryOpen(false)
+  }, [activeChapterId])
 
-    // Clear on unmount
-    return () => {
-      setStoreActiveChapter(null)
-      setActiveSubjectColor(null)
+  // Trigger AI generation if smart_notes is missing. Uses the real
+  // vector-store-backed generator (settings-driven prompt, validated
+  // three-layer schema) via a server action — not a raw client fetch —
+  // so it can't drift out of sync with how the chatbot/quiz generators
+  // read chapter data (no more guessing at a `file_url` field that
+  // doesn't exist on the chapters table; the action looks the chapter
+  // up itself from `pdf_url`).
+  const handleSmartNotesClick = async () => {
+    setContentView('smart-notes')
+
+    const hasNotes = !!activeChapter?.smart_notes?.core_layer
+
+    if (!hasNotes && activeChapter?.id && !isGenerating) {
+      try {
+        setIsGenerating(true)
+        await generateAndSaveSmartNotes(activeChapter.id)
+        // Refetch chapters data so smart_notes is updated in state
+        await queryClient.invalidateQueries({ queryKey: ['chapters', subjectId] })
+      } catch (err) {
+        console.error('Failed to auto-generate notes:', err)
+      } finally {
+        setIsGenerating(false)
+      }
     }
-  }, [activeChapter, themeColor, setStoreActiveChapter, setActiveSubjectColor])
-
-  // Mutation for completion
-  const toggleCompletionMutation = useMutation({
-    mutationFn: ({ chapterId, completed }: { chapterId: string; completed: boolean }) =>
-      userProgressService.toggleCompletion(user?.id || '', chapterId, completed),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user-progress', user?.id, subjectId] })
-      queryClient.invalidateQueries({ queryKey: ['student-progress'] })
-    },
-  })
-
-  const handleToggleCompletion = (chapterId: string) => {
-    const isCurrentlyCompleted = completedChapterIds.includes(chapterId)
-    toggleCompletionMutation.mutate({ chapterId, completed: !isCurrentlyCompleted })
-  }
-
-  // Redirect if subject not found
-  useEffect(() => {
-    if (!isSubjectLoading && !subject) {
-      router.push('/student-dashboard')
-    }
-  }, [isSubjectLoading, subject, router])
-
-  if (isSubjectLoading || isChaptersLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-background">
-        <div className="relative">
-          <div className="w-20 h-20 rounded-full border-4 border-neutral-100 border-t-primary animate-spin" />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Loader2 className="w-8 h-8 text-primary/20" />
-          </div>
-        </div>
-        <p className="mt-6 text-neutral-500 font-medium animate-pulse">
-          Preparing your classroom...
-        </p>
-      </div>
-    )
-  }
-
-  if (!subject) {
-    return null // Redirection handled by useEffect
   }
 
   return (
@@ -172,47 +136,92 @@ export default function SubjectDetailPage() {
             activeChapter ? completedChapterIds.includes(activeChapter.id) : false
           }
           themeColor={themeColor}
+          onSummaryClick={() => setIsSummaryOpen(true)} // Opens Smart Summary dialog
           onQuizClick={() => {
             if (activeChapter) {
-              initQuiz({
-                chapterId: activeChapter.id,
-                isReviewMode: false,
-              })
+              initQuiz({ chapterId: activeChapter.id, isReviewMode: false })
               router.push('/quiz')
             }
           }}
-          onCompleteClick={() => activeChapter && handleToggleCompletion(activeChapter.id)}
         />
       </MotionWrapper>
 
-      <div className="w-full px-6 md:px-12 lg:pl-0 lg:pr-12 xl:pr-20 mt-8">
-        <MotionContainer
-          className="flex flex-col lg:flex-row gap-12 lg:gap-16 xl:gap-24"
-          staggerChildren={0.2}
-        >
-          {/* Sidebar: Chapter List */}
+      {/* Main Container */}
+      <div className="w-full px-6 md:px-12 lg:pl-0 lg:pr-12 xl:pr-20 mt-6">
+        {/* Interactive Toolbar */}
+        {activeChapter && (
           <MotionWrapper
-            animation="fadeInRight"
-            className="lg:w-[320px] xl:w-[400px] 2xl:w-[480px] shrink-0"
+            animation="fadeInUp"
+            className="mb-6 flex flex-wrap items-center justify-between gap-4 p-2 bg-neutral-100/60 dark:bg-neutral-900/60 border border-neutral-200/80 dark:border-neutral-800 rounded-2xl backdrop-blur-sm"
           >
+            <TopicQuizLauncher chapterId={activeChapter.id} userId={user?.id} />
+
+            <div className="inline-flex items-center rounded-xl border border-neutral-200 dark:border-neutral-800 p-1 bg-white dark:bg-neutral-950 shadow-xs">
+              <button
+                onClick={() => setContentView('pdf')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  contentView === 'pdf'
+                    ? 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 shadow-xs'
+                    : 'text-neutral-500 hover:text-neutral-800 dark:text-neutral-400'
+                }`}
+              >
+                <FileText size={15} />
+                Chapter PDF
+              </button>
+              <button
+                onClick={handleSmartNotesClick}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  contentView === 'smart-notes'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-neutral-500 hover:text-indigo-600 dark:text-neutral-400'
+                }`}
+              >
+                <Sparkles size={15} className="text-amber-300 fill-amber-300" />
+                Active-Recall Smart Notes
+              </button>
+            </div>
+          </MotionWrapper>
+        )}
+
+        {/* Content View */}
+        <MotionContainer className="flex flex-col lg:flex-row gap-8 lg:gap-12 xl:gap-16">
+          <MotionWrapper animation="fadeInRight" className="lg:w-[320px] xl:w-[380px] shrink-0">
             <ChapterSidebar
               chapters={chapters}
               activeChapterId={activeChapterId}
               completedChapterIds={completedChapterIds}
-              chapterProgress={allChapterProgress}
+              chapterProgress={[]}
               onChapterSelect={setActiveChapterId}
               themeColor={themeColor}
-              onToggleCompletion={handleToggleCompletion}
             />
           </MotionWrapper>
 
-          {/* Content Area: PDF Viewer */}
           <MotionWrapper animation="fadeInUp" className="flex-1 min-w-0">
-            <PDFViewer
-              chapter={activeChapter}
-              themeColor={themeColor}
-              hasChapters={chapters.length > 0}
-            />
+            {contentView === 'smart-notes' ? (
+              isGenerating ? (
+                <div className="flex flex-col items-center justify-center p-16 text-center bg-indigo-50/50 dark:bg-neutral-900 border border-indigo-200 dark:border-neutral-800 rounded-3xl">
+                  <div className="relative mb-4">
+                    <Brain className="w-12 h-12 text-indigo-600 animate-bounce" />
+                    <Sparkles className="w-5 h-5 text-amber-400 absolute -top-1 -right-1 animate-pulse" />
+                  </div>
+                  <h3 className="text-lg font-bold text-neutral-800 dark:text-neutral-100">
+                    Generating Active-Recall Notes...
+                  </h3>
+                  <p className="text-xs text-neutral-500 mt-1 max-w-xs">
+                    AI is parsing the chapter PDF to craft targeted revision questions and
+                    summaries.
+                  </p>
+                </div>
+              ) : (
+                <SmartNotesRenderer notes={activeChapter?.smart_notes} />
+              )
+            ) : (
+              <PDFViewer
+                chapter={activeChapter}
+                themeColor={themeColor}
+                hasChapters={chapters.length > 0}
+              />
+            )}
           </MotionWrapper>
         </MotionContainer>
       </div>

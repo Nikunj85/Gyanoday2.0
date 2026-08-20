@@ -9,11 +9,15 @@ import {
   GripVertical,
   Languages,
   ListOrdered,
+  Loader2,
+  Sparkles,
   Trash2,
   Video,
 } from 'lucide-react'
 import Link from 'next/link'
+import { useState } from 'react'
 
+import { generateAndSaveSmartNotes } from '@/app/actions/smart-notes-actions'
 import { Button } from '@/components/ui/button'
 import {
   Table,
@@ -23,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useToast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
 import { Chapter } from '@/types'
 import { Subject } from '@/types'
@@ -45,6 +50,33 @@ export function ChaptersTable({
   onDelete,
   onReorder,
 }: ChaptersTableProps) {
+  const { toast } = useToast()
+  const [generatingNotesFor, setGeneratingNotesFor] = useState<string | null>(null)
+
+  const handleGenerateSmartNotes = async (chapter: Chapter) => {
+    if (!chapter.pdf_url) {
+      toast({
+        variant: 'destructive',
+        title: 'No PDF',
+        description: 'This chapter needs a PDF uploaded before generating Smart Notes.',
+      })
+      return
+    }
+    setGeneratingNotesFor(chapter.id)
+    try {
+      await generateAndSaveSmartNotes(chapter.id)
+      toast({ title: 'Smart Notes generated', description: `Generated for "${chapter.title}".` })
+    } catch (err) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to generate Smart Notes',
+        description: err instanceof Error ? err.message : 'Please try again.',
+      })
+    } finally {
+      setGeneratingNotesFor(null)
+    }
+  }
+
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return
 
@@ -220,6 +252,22 @@ export function ChaptersTable({
                               className="h-9 w-9 text-muted-foreground hover:text-primary hover:bg-secondary/30 rounded-xl transition-all"
                             >
                               <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleGenerateSmartNotes(chapter)}
+                              disabled={generatingNotesFor === chapter.id}
+                              title={chapter.smart_notes ? 'Regenerate Smart Notes' : 'Generate Smart Notes'}
+                              className="h-9 w-9 text-muted-foreground hover:text-primary hover:bg-secondary/30 rounded-xl transition-all"
+                            >
+                              {generatingNotesFor === chapter.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Sparkles
+                                  className={cn('h-4 w-4', chapter.smart_notes && 'text-primary')}
+                                />
+                              )}
                             </Button>
                             <Button
                               variant="ghost"

@@ -44,6 +44,9 @@ interface QuizState {
   isGeneratingMore: boolean
   generationError: 'quota_exceeded' | 'generic' | null
   chapterId: string | null
+  // When set, this quiz is scoped to a single topic/concept within the
+  // chapter (targeted practice) rather than the whole chapter.
+  topic: string | null
   isReviewMode: boolean
   startTime: string | null
   prevStats?: {
@@ -66,6 +69,7 @@ interface QuizState {
   initQuiz: (params: {
     chapterId: string | null
     isReviewMode: boolean
+    topic?: string | null
     prevScore?: string
     prevTotal?: string
     prevTime?: string
@@ -97,19 +101,21 @@ export const useQuizStore = create<QuizState>()(
       isGeneratingMore: false,
       generationError: null,
       chapterId: null,
+      topic: null,
       isReviewMode: false,
       startTime: null,
       lastAttemptStats: null,
       lastAttemptId: null,
       lastInsightForAttemptId: null,
 
-      initQuiz: ({ chapterId, isReviewMode, prevScore, prevTotal, prevTime }) => {
+      initQuiz: ({ chapterId, isReviewMode, topic, prevScore, prevTotal, prevTime }) => {
         set({
           questions: [],
           currentIndex: 0,
           score: 0,
           userAnswers: {},
           chapterId,
+          topic: topic || null,
           isReviewMode,
           isGenerating: true,
           isGeneratingMore: false,
@@ -131,10 +137,12 @@ export const useQuizStore = create<QuizState>()(
       },
 
       loadOrGenerateQuiz: async () => {
-        const { chapterId, isReviewMode, questions } = get()
+        const { chapterId, isReviewMode, questions, topic } = get()
         if (!chapterId || questions.length > 0) return
 
-        const storageKey = `quiz_questions_${chapterId}`
+        // Topic-scoped storage key so a topic-practice quiz and the
+        // full-chapter quiz don't overwrite each other's cached questions.
+        const storageKey = topic ? `quiz_questions_${chapterId}_${topic}` : `quiz_questions_${chapterId}`
 
         if (isReviewMode) {
           try {
@@ -172,8 +180,14 @@ export const useQuizStore = create<QuizState>()(
           const response = await fetch('/api/quiz/stream', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chapterId, userId: user?.id }),
+            body: JSON.stringify({ chapterId, userId: user?.id, topic: topic || undefined }),
           })
+
+          if (!response.ok) {
+            // A server crash/error still returns a body (usually an HTML
+            // error page) — must not be parsed as if it were real quiz data.
+            throw new Error('Failed to start quiz generation. Please try again.')
+          }
 
           if (!response.body) {
             throw new Error('No response body from quiz generation')
@@ -265,6 +279,7 @@ export const useQuizStore = create<QuizState>()(
           isReviewMode,
           isGeneratingMore,
           chapterId,
+          topic,
           timeInSeconds,
           startTime,
           prevStats,
@@ -325,7 +340,9 @@ export const useQuizStore = create<QuizState>()(
 
         // Save consolidated questions for review mode
         if (chapterId) {
-          const storageKey = `quiz_questions_${chapterId}`
+          const storageKey = topic
+            ? `quiz_questions_${chapterId}_${topic}`
+            : `quiz_questions_${chapterId}`
           sessionStorage.setItem(storageKey, JSON.stringify(updatedQuestions))
           // Clear legacy answers key if it exists
           sessionStorage.removeItem(`quiz_answers_${chapterId}`)
@@ -377,6 +394,7 @@ export const useQuizStore = create<QuizState>()(
           isGeneratingMore: false,
           generationError: null,
           chapterId: null,
+          topic: null,
           isReviewMode: false,
           startTime: null,
           prevStats: undefined,
@@ -391,6 +409,7 @@ export const useQuizStore = create<QuizState>()(
       storage: createJSONStorage(() => sessionStorage),
       partialize: (state) => ({
         chapterId: state.chapterId,
+        topic: state.topic,
         isReviewMode: state.isReviewMode,
         prevStats: state.prevStats,
         startTime: state.startTime,
