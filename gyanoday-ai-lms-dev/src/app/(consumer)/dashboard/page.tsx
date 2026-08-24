@@ -11,7 +11,6 @@ import { useUserStore } from '@/store/user-store'
 
 import { MotivationQuote } from '../components/MotivationQuote'
 import { DashboardHeader } from '../components/DashboardHeader'
-import { LearningJourneyMap } from '../components/LearningJourneyMap'
 import { StudyTimeChart } from '../components/StudyTimeChart'
 import { SubjectsProgressList } from '../components/SubjectsProgressList'
 import { WeeklyStreak } from '../components/WeeklyStreak'
@@ -31,6 +30,7 @@ export default function DashboardPage() {
 
   const subjects = overview?.subjects || []
   const studyTimeByDay = overview?.studyTimeByDay || []
+  const studyTimeByWeek = overview?.studyTimeByWeek || []
 
   // Sync course progress with global store so DashboardHeader can display
   // the correct percentage.
@@ -86,18 +86,9 @@ export default function DashboardPage() {
 
         {/* Weekly study time */}
         <MotionWrapper animation="fadeInUp" delay={0.2}>
-          <StudyTimeChart data={studyTimeByDay} />
+          <StudyTimeChart data={studyTimeByDay} monthlyData={studyTimeByWeek} />
         </MotionWrapper>
 
-        {/* Learning journey map */}
-        <MotionWrapper animation="fadeInUp" delay={0.25}>
-          <div>
-            <h3 className="text-base font-bold text-neutral-800 dark:text-neutral-100 mb-4">
-              Your Learning Path
-            </h3>
-            <LearningJourneyMap subjects={subjects} />
-          </div>
-        </MotionWrapper>
       </div>
     </div>
   )

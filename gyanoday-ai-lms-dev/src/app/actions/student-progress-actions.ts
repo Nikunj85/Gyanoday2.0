@@ -44,10 +44,17 @@ export interface StudyDay {
   minutes: number
 }
 
+export interface StudyWeek {
+  label: string
+  weekStart: string
+  minutes: number
+}
+
 export interface StudentProgressOverview {
   subjects: SubjectProgressOverview[]
   weakConcepts: WeakConcept[]
   studyTimeByDay: StudyDay[]
+  studyTimeByWeek: StudyWeek[]
 }
 
 function masteryFromScore(pct: number): MasteryLevel {
@@ -63,7 +70,7 @@ export async function getStudentProgressOverview(
   const supabase = await createClient()
 
   if (!classId) {
-    return { subjects: [], weakConcepts: [], studyTimeByDay: [] }
+    return { subjects: [], weakConcepts: [], studyTimeByDay: [], studyTimeByWeek: [] }
   }
 
   const [{ data: subjects }, { data: chapters }, { data: progress }, { data: insights }, { data: attempts }] =
@@ -247,6 +254,7 @@ export async function getStudentProgressOverview(
   // (started_at -> submitted_at) — same reasonable-outlier guard used for
   // the parent portal's weekly study-time metric.
   const studyTimeByDay: StudyDay[] = []
+  const studyTimeByWeek: StudyWeek[] = []
   const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
   const minutesByDate = new Map<string, number>()
   ;(attempts || []).forEach((a: any) => {
@@ -256,9 +264,18 @@ export async function getStudentProgressOverview(
     const dateKey = new Date(a.created_at).toISOString().slice(0, 10)
     minutesByDate.set(dateKey, (minutesByDate.get(dateKey) || 0) + mins)
   })
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date()
-    d.setDate(d.getDate() - i)
+
+  // Daily tracking: Monday through Sunday for the current week.
+  const now = new Date()
+  const currentDay = now.getDay()
+  const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay
+  const monday = new Date(now)
+  monday.setHours(0, 0, 0, 0)
+  monday.setDate(now.getDate() + mondayOffset)
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
     const dateKey = d.toISOString().slice(0, 10)
     studyTimeByDay.push({
       day: dayLabels[d.getDay()],
@@ -267,5 +284,32 @@ export async function getStudentProgressOverview(
     })
   }
 
-  return { subjects: subjectOverviews, weakConcepts, studyTimeByDay }
+  // Monthly tracking: aggregate the current calendar month into week buckets.
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+  const weekBuckets = new Map<string, number>()
+  ;(attempts || []).forEach((a: any) => {
+    if (!a.started_at || !a.submitted_at) return
+    const mins = (new Date(a.submitted_at).getTime() - new Date(a.started_at).getTime()) / 60000
+    if (mins <= 0 || mins >= 120) return
+    const date = new Date(a.created_at)
+    if (date < monthStart || date > monthEnd) return
+    const week = Math.floor((date.getDate() - 1) / 7) + 1
+    const key = `Week ${week}`
+    weekBuckets.set(key, (weekBuckets.get(key) || 0) + mins)
+  })
+
+  const totalWeeks = Math.ceil(monthEnd.getDate() / 7)
+  for (let week = 1; week <= totalWeeks; week++) {
+    const startDay = (week - 1) * 7 + 1
+    const endDay = Math.min(week * 7, monthEnd.getDate())
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), startDay).toISOString().slice(0, 10)
+    studyTimeByWeek.push({
+      label: `Week ${week}`,
+      weekStart,
+      minutes: Math.round(weekBuckets.get(`Week ${week}`) || 0),
+    })
+  }
+
+  return { subjects: subjectOverviews, weakConcepts, studyTimeByDay, studyTimeByWeek }
 }
