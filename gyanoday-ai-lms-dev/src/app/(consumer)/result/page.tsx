@@ -31,8 +31,7 @@ import { userProgressService } from '@/services/user-progress-service'
 import { useChapterStore } from '@/store/chapter-store'
 import { useQuizStore } from '@/store/use-quiz-store'
 import { useUserStore } from '@/store/user-store'
-
-import { ResultCard } from '../../components/ResultCard'
+import { ResultCard } from '../components/ResultCard'
 import { ReviewAnswerDrawer } from '@/components/common/ReviewAnswerDrawer'
 
 function ResultContent() {

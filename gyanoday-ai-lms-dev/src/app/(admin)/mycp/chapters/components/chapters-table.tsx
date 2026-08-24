@@ -10,6 +10,7 @@ import {
   Languages,
   ListOrdered,
   Loader2,
+  MessageSquareText,
   Sparkles,
   Trash2,
   Video,
@@ -17,6 +18,7 @@ import {
 import Link from 'next/link'
 import { useState } from 'react'
 
+import { generateChapterSummary } from '@/app/actions/chapter-actions'
 import { generateAndSaveSmartNotes } from '@/app/actions/smart-notes-actions'
 import { Button } from '@/components/ui/button'
 import {
@@ -52,6 +54,32 @@ export function ChaptersTable({
 }: ChaptersTableProps) {
   const { toast } = useToast()
   const [generatingNotesFor, setGeneratingNotesFor] = useState<string | null>(null)
+  const [generatingSummaryFor, setGeneratingSummaryFor] = useState<string | null>(null)
+
+  const handleGenerateSummary = async (chapter: Chapter) => {
+    if (!chapter.pdf_url) {
+      toast({
+        variant: 'destructive',
+        title: 'No PDF',
+        description: 'This chapter needs a PDF uploaded before generating a summary.',
+      })
+      return
+    }
+    setGeneratingSummaryFor(chapter.id)
+    try {
+      const result = await generateChapterSummary(chapter.id, chapter.pdf_url, chapter.language)
+      if (!result.success) throw new Error(result.error || 'Failed to generate summary.')
+      toast({ title: 'Summary generated', description: `Generated for "${chapter.title}".` })
+    } catch (err) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to generate summary',
+        description: err instanceof Error ? err.message : 'Please try again.',
+      })
+    } finally {
+      setGeneratingSummaryFor(null)
+    }
+  }
 
   const handleGenerateSmartNotes = async (chapter: Chapter) => {
     if (!chapter.pdf_url) {
@@ -252,6 +280,22 @@ export function ChaptersTable({
                               className="h-9 w-9 text-muted-foreground hover:text-primary hover:bg-secondary/30 rounded-xl transition-all"
                             >
                               <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleGenerateSummary(chapter)}
+                              disabled={generatingSummaryFor === chapter.id}
+                              title={chapter.description ? 'Regenerate AI Summary' : 'Generate AI Summary'}
+                              className="h-9 w-9 text-muted-foreground hover:text-primary hover:bg-secondary/30 rounded-xl transition-all"
+                            >
+                              {generatingSummaryFor === chapter.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <MessageSquareText
+                                  className={cn('h-4 w-4', chapter.description && 'text-primary')}
+                                />
+                              )}
                             </Button>
                             <Button
                               variant="ghost"

@@ -45,8 +45,6 @@ export async function* filterHiddenReasoning(
 
     // eslint-disable-next-line no-constant-condition
     while (true) {
-      if (state === 'done') break
-
       if (state === 'inside-response') {
         const closeIdx = buffer.indexOf(RESPONSE_CLOSE)
         if (closeIdx === -1) {
@@ -69,6 +67,24 @@ export async function* filterHiddenReasoning(
       // <internal_thought> block or stray text — never forwarded. We're
       // only scanning for where <student_facing_response> begins.
       const openIdx = buffer.indexOf(RESPONSE_OPEN)
+      const thoughtIdx = buffer.indexOf(THOUGHT_OPEN)
+
+      // A response tag inside private reasoning is not a valid response
+      // boundary. Discard the complete thought before looking for the next
+      // response tag.
+      if (thoughtIdx !== -1 && (openIdx === -1 || thoughtIdx < openIdx)) {
+        const thoughtCloseIdx = buffer.indexOf(
+          THOUGHT_CLOSE,
+          thoughtIdx + THOUGHT_OPEN.length
+        )
+        if (thoughtCloseIdx === -1) {
+          buffer = buffer.slice(0, thoughtIdx) || longestPartialTagSuffix(buffer, THOUGHT_OPEN)
+          break
+        }
+        buffer = buffer.slice(thoughtCloseIdx + THOUGHT_CLOSE.length)
+        continue
+      }
+
       if (openIdx === -1) {
         // Keep only enough of the buffer to detect a split tag next chunk;
         // everything else in "before" state is discarded, not yielded.
@@ -93,6 +109,10 @@ export async function* filterHiddenReasoning(
     // of a perfectly-tagged reply" guarantee is relaxed, for this edge
     // case only.
     yield stripInternalThought(fullRawText)
+  } else if (state === 'inside-response' && buffer) {
+    // The stream ended before the closing tag. Any held-back partial tag is
+    // response text at EOF and must not be discarded.
+    yield buffer
   }
 }
 
