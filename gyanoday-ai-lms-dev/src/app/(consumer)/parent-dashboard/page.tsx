@@ -9,6 +9,7 @@ import {
   Clock,
   Flame,
   Loader2,
+  PenLine,
   Sparkles,
   Target,
   Users,
@@ -119,7 +120,7 @@ function ChildCard({ student }: { student: LinkedStudentSummary }) {
             <p className="text-sm text-red-500 py-4">{error}</p>
           ) : progress ? (
             <div className="space-y-5">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                 <MetricPill
                   icon={<Target size={16} />}
                   label="Avg. score"
@@ -129,6 +130,11 @@ function ChildCard({ student }: { student: LinkedStudentSummary }) {
                   icon={<BookOpenCheck size={16} />}
                   label="Chapters done"
                   value={`${progress.chaptersCompleted}/${progress.totalChapters || '—'}`}
+                />
+                <MetricPill
+                  icon={<PenLine size={16} />}
+                  label="Quizzes practiced"
+                  value={progress.totalAttempts}
                 />
                 <MetricPill
                   icon={<Clock size={16} />}

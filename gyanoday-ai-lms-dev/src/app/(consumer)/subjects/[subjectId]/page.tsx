@@ -6,11 +6,13 @@ import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 import { generateAndSaveSmartNotes } from '@/app/actions/smart-notes-actions'
+import { getRecommendedTopics } from '@/app/actions/concept-actions'
 import { SmartNotesRenderer } from '@/components/common/SmartNotesRenderer'
 import { TopicQuizLauncher } from '@/components/common/TopicQuizLauncher'
 import { Button } from '@/components/ui/button'
 import { MotionContainer, MotionWrapper } from '@/lib/animations/MotionWrapper'
 import { chapterService } from '@/services/chapter-service'
+import { quizService } from '@/services/quiz-service'
 import { quizAttemptsService } from '@/services/quiz-attempts-service'
 import { subjectService } from '@/services/subject-service'
 import { userProgressService } from '@/services/user-progress-service'
@@ -21,6 +23,7 @@ import { useUserStore } from '@/store/user-store'
 import { ChapterSidebar } from '../../components/ChapterSidebar'
 import { PDFViewer } from '../../components/PDFViewer'
 import { SubjectHeader } from '../../components/SubjectHeader'
+import { SmartSummaryDialog } from '../../components/SmartSummaryDialog'
 
 export default function SubjectDetailPage() {
   const { subjectId } = useParams() as { subjectId: string }
@@ -74,6 +77,19 @@ export default function SubjectDetailPage() {
       return await quizAttemptsService.getChapterQuizAttempts(user?.id || '', chapterIds)
     },
     enabled: !!user?.id && !!chaptersData?.data?.length,
+  })
+
+  // Chapter-specific learning insights used by the Smart Summary modal.
+  const { data: chapterPerformance } = useQuery({
+    queryKey: ['chapter-performance', user?.id, activeChapterId],
+    queryFn: () => quizService.getChapterPerformance(activeChapterId!, user!.id),
+    enabled: !!user?.id && !!activeChapterId,
+  })
+
+  const { data: chapterWeakTopics = [] } = useQuery({
+    queryKey: ['chapter-weak-topics', user?.id, activeChapterId],
+    queryFn: () => getRecommendedTopics(user!.id, activeChapterId!),
+    enabled: !!user?.id && !!activeChapterId,
   })
 
   const chapters = chaptersData?.data || []
@@ -154,6 +170,8 @@ export default function SubjectDetailPage() {
           }
           themeColor={themeColor}
           onSummaryClick={() => setIsSummaryOpen(true)} // Opens Smart Summary dialog
+          chapterPerformance={chapterPerformance}
+          weakTopics={chapterWeakTopics}
           onQuizClick={() => {
             if (activeChapter) {
               initQuiz({ chapterId: activeChapter.id, isReviewMode: false })
@@ -169,31 +187,33 @@ export default function SubjectDetailPage() {
         {activeChapter && (
           <MotionWrapper
             animation="fadeInUp"
-            className="mb-6 flex flex-wrap items-center justify-between gap-4 p-2 bg-neutral-100/60 dark:bg-neutral-900/60 border border-neutral-200/80 dark:border-neutral-800 rounded-2xl backdrop-blur-sm"
+            className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-neutral-100/60 dark:bg-neutral-900/60 border border-neutral-200/80 dark:border-neutral-800 rounded-2xl backdrop-blur-sm"
           >
-            <TopicQuizLauncher chapterId={activeChapter.id} userId={user?.id} />
+            <div className="shrink-0">
+              <TopicQuizLauncher chapterId={activeChapter.id} userId={user?.id} />
+            </div>
 
-            <div className="inline-flex items-center rounded-xl border border-neutral-200 dark:border-neutral-800 p-1 bg-white dark:bg-neutral-950 shadow-xs">
+            <div className="flex w-full sm:w-auto items-center justify-end rounded-xl border border-neutral-200 dark:border-neutral-800 p-1 bg-white dark:bg-neutral-950 shadow-sm">
               <button
                 onClick={() => setContentView('pdf')}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                className={`flex min-h-11 flex-1 sm:flex-none items-center justify-center gap-2 px-4 md:px-5 rounded-lg text-sm md:text-base font-extrabold transition-all whitespace-nowrap ${
                   contentView === 'pdf'
-                    ? 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 shadow-xs'
+                    ? 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 shadow-sm'
                     : 'text-neutral-500 hover:text-neutral-800 dark:text-neutral-400'
                 }`}
               >
-                <FileText size={15} />
+                <FileText size={12} />
                 Chapter PDF
               </button>
               <button
                 onClick={handleSmartNotesClick}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                className={`flex min-h-11 flex-1 sm:flex-none items-center justify-center gap-2 px-4 md:px-5 rounded-lg text-xs md:text-base font-extrabold transition-all whitespace-nowrap ${
                   contentView === 'smart-notes'
-                    ? 'bg-indigo-600 text-white shadow-xs'
+                    ? 'bg-indigo-600 text-white shadow-sm'
                     : 'text-neutral-500 hover:text-indigo-600 dark:text-neutral-400'
                 }`}
               >
-                <Sparkles size={15} className="text-amber-300 fill-amber-300" />
+                <Sparkles size={12} className="text-amber-300 fill-amber-300" />
                 Active-Recall Smart Notes
               </button>
             </div>
@@ -242,6 +262,16 @@ export default function SubjectDetailPage() {
           </MotionWrapper>
         </MotionContainer>
       </div>
+
+      <SmartSummaryDialog
+        isOpen={isSummaryOpen}
+        onClose={() => setIsSummaryOpen(false)}
+        title={activeChapter?.title || 'Chapter Summary'}
+        description={activeChapter?.description || 'No summary available for this chapter yet.'}
+        themeColor={themeColor}
+        chapterPerformance={chapterPerformance}
+        weakTopics={chapterWeakTopics}
+      />
     </main>
   )
 }

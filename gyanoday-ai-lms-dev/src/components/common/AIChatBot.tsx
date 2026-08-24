@@ -433,7 +433,7 @@ export function AIChatBot() {
         className="relative w-24 h-24 sm:w-32 sm:h-32 transition-all duration-300 hover:scale-110 active:scale-95 group cursor-pointer"
         aria-label="Toggle AI Chat"
       >
-        <div className="absolute right-0 bg-primary text-white text-[10px] uppercase tracking-widest font-bold py-1.5 px-3 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0 whitespace-nowrap shadow-lg pointer-events-none z-20">
+        <div className="absolute right-0 bg-primary text-white text-[10px] uppercase tracking-widest font-bold py-1.5 px-3 rounded-full opacity-100 transition-all duration-300 whitespace-nowrap shadow-lg pointer-events-none z-20">
           Ask SIKSHA ✨
         </div>
         <div className="absolute inset-0 bg-primary/20 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 scale-75 group-hover:scale-110" />

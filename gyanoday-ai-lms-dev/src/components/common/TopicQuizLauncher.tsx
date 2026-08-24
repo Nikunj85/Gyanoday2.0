@@ -75,14 +75,14 @@ export function TopicQuizLauncher({ chapterId, userId, onStartFullQuiz }: TopicQ
       <SheetTrigger asChild>
         <button
           className={cn(
-            'group relative flex items-center gap-2 pl-3.5 pr-3 py-2 rounded-xl text-sm font-bold text-white shadow-sm transition-all active:scale-95 hover:shadow-md',
+            'group relative flex items-center justify-center gap-2 h-11 pl-4 pr-3.5 rounded-xl text-base font-extrabold text-white shadow-sm transition-all active:scale-95 hover:shadow-md',
             'bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 hover:from-indigo-500 hover:via-violet-500 hover:to-purple-500'
           )}
         >
-          <Target size={16} className="shrink-0" />
+          <Target size={18} className="shrink-0" />
           <span>Practice a Topic</span>
           {recommended.length > 0 && (
-            <span className="flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full bg-white/25 text-[11px] font-extrabold tabular-nums">
+            <span className="flex items-center justify-center min-w-[22px] h-6 px-1.5 rounded-full bg-white/25 text-xs font-extrabold tabular-nums">
               {recommended.length}
             </span>
           )}

@@ -7,6 +7,18 @@ import { useTranslation } from 'react-i18next'
 
 import { Subject } from '@/types'
 
+interface ChapterPerformance {
+  attempts: number
+  averagePct: number
+  bestPct: number
+  latestPct: number
+}
+
+interface WeakTopic {
+  topic: string
+  timesFlagged: number
+}
+
 import { SmartSummaryDialog } from './SmartSummaryDialog'
 
 interface SubjectHeaderProps {
@@ -20,6 +32,8 @@ interface SubjectHeaderProps {
   onQuizClick?: () => void
   onCompleteClick?: () => void
   onSummaryClick?: () => void // Added to open summary dialog from parent
+  chapterPerformance?: ChapterPerformance
+  weakTopics?: WeakTopic[]
 }
 
 export function SubjectHeader({
@@ -33,6 +47,8 @@ export function SubjectHeader({
   onQuizClick,
   onCompleteClick,
   onSummaryClick,
+  chapterPerformance,
+  weakTopics,
 }: SubjectHeaderProps) {
   const { t } = useTranslation()
   const progress = totalChapters > 0 ? (completedChapters / totalChapters) * 100 : 0
@@ -274,6 +290,8 @@ export function SubjectHeader({
         title={activeChapterTitle || 'Chapter Summary'}
         description={activeChapterDescription || 'No summary available for this chapter.'}
         themeColor={themeColor}
+        chapterPerformance={chapterPerformance}
+        weakTopics={weakTopics}
       />
     </header>
   )

@@ -15,7 +15,11 @@ export const quizService = {
     // combination. Filtering by topic matters: without it, a topic-quiz and
     // the full-chapter quiz would collide onto the same row (and once more
     // than one existed, .single() would start throwing "multiple rows").
-    let query = supabase.from('quizzes').select('id').eq('chapter_id', chapterId).eq('user_id', userId)
+    let query = supabase
+      .from('quizzes')
+      .select('id')
+      .eq('chapter_id', chapterId)
+      .eq('user_id', userId)
     query = topic ? query.eq('topic', topic) : query.is('topic', null)
 
     const { data: existingQuiz, error: fetchError } = await query.maybeSingle()
@@ -87,6 +91,50 @@ export const quizService = {
     } catch (error) {
       console.error('Error saving quiz attempt:', error)
       throw error
+    }
+  },
+
+  async getChapterPerformance(chapterId: string, userId: string) {
+    try {
+      const { data: quizzes, error: quizError } = await supabase
+        .from('quizzes')
+        .select('id')
+        .eq('chapter_id', chapterId)
+
+      if (quizError) throw quizError
+      const quizIds = (quizzes || []).map((quiz: { id: string }) => quiz.id)
+
+      if (!quizIds.length) {
+        return { attempts: 0, averagePct: 0, bestPct: 0, latestPct: 0 }
+      }
+
+      const { data: attempts, error: attemptsError } = await supabase
+        .from('quiz_attempts')
+        .select('score, total_questions, created_at')
+        .in('quiz_id', quizIds)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+
+      if (attemptsError) throw attemptsError
+      if (!attempts?.length) {
+        return { attempts: 0, averagePct: 0, bestPct: 0, latestPct: 0 }
+      }
+
+      const percentages = attempts.map((attempt: { score: number; total_questions: number }) =>
+        attempt.total_questions > 0 ? (attempt.score / attempt.total_questions) * 100 : 0
+      )
+
+      return {
+        attempts: percentages.length,
+        averagePct: Math.round(
+          percentages.reduce((sum: number, pct: number) => sum + pct, 0) / percentages.length
+        ),
+        bestPct: Math.round(Math.max(...percentages)),
+        latestPct: Math.round(percentages[0]),
+      }
+    } catch (error) {
+      console.error('Error fetching chapter performance:', error)
+      return { attempts: 0, averagePct: 0, bestPct: 0, latestPct: 0 }
     }
   },
 
