@@ -98,7 +98,11 @@ export function AIChatBot() {
     handleUserMessage: async (content: string) => {
       const userMessage = createUserMessage(content)
 
-      const historyContext = useChatStore.getState().getRecentContext(chapterId, 5)
+      // 12 messages (~6 exchanges) — needs to be wide enough for the tutor
+      // to actually see 2-3 full attempt/hint cycles on the same step and
+      // decide when to break Socratic mode and just give the answer,
+      // rather than losing that context after a couple of turns.
+      const historyContext = useChatStore.getState().getRecentContext(chapterId, 12)
 
       addMessage(chapterId, userMessage)
 
@@ -150,6 +154,7 @@ export function AIChatBot() {
         const decoder = new TextDecoder()
         let sawFirstChunk = false
         let streamedText = ''
+        let streamFailed = false
 
         while (true) {
           const { done, value } = await reader.read()
@@ -158,19 +163,25 @@ export function AIChatBot() {
           const chunk = decoder.decode(value, { stream: true })
 
           if (chunk.includes(STREAM_ERROR_MARKER)) {
+            streamFailed = true
             const [beforeError, errorMsg] = chunk.split(STREAM_ERROR_MARKER)
             if (beforeError) {
               appendToMessage(chapterId, botMessage.id, beforeError)
               streamedText += beforeError
             }
+            const finalErrorMsg = errorMsg?.trim() || CHATBOT_GENERAL_ERROR
             if (!streamedText.trim()) {
               // Nothing useful streamed before the failure — surface the error.
-              appendToMessage(chapterId, botMessage.id, errorMsg || CHATBOT_GENERAL_ERROR)
+              appendToMessage(chapterId, botMessage.id, finalErrorMsg)
             }
+            // Logged here too (in addition to the server-side log this
+            // request already produced) so the actual failure reason is
+            // visible in the browser console, not just a generic toast.
+            console.error('[AIChatBot] Stream error from server:', finalErrorMsg)
             toast({
               variant: 'destructive',
               title: 'Chatbot Error',
-              description: errorMsg || CHATBOT_GENERAL_ERROR,
+              description: finalErrorMsg,
             })
             break
           }
@@ -186,11 +197,16 @@ export function AIChatBot() {
           streamedText += chunk
         }
 
-        if (!streamedText.trim()) {
+        // Only treat "nothing streamed" as its own separate error case when
+        // the loop ended WITHOUT already handling a STREAM_ERROR_MARKER —
+        // otherwise this double-appends the generic message right after
+        // the real one.
+        if (!streamFailed && !streamedText.trim()) {
           appendToMessage(chapterId, botMessage.id, CHATBOT_GENERAL_ERROR)
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : CHATBOT_GENERAL_ERROR
+        console.error('[AIChatBot] Failed to fetch/stream chatbot response:', error)
         appendToMessage(chapterId, botMessage.id, errorMsg)
         toast({ variant: 'destructive', title: 'Error', description: errorMsg })
       } finally {

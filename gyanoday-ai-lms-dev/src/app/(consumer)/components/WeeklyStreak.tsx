@@ -1,13 +1,14 @@
 'use client'
 
-import { ArrowDown, Info, Sparkles } from 'lucide-react'
-import React, { useState } from 'react'
+import { ArrowDown, Flame, Info, Sparkles } from 'lucide-react'
+import React, { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { MotionWrapper } from '@/lib/animations/MotionWrapper'
 import { StreakDayData, StreakRule } from '@/types'
 
 import { StreakCard } from './StreakCard'
+import { StreakReminderOptIn } from './StreakReminderOptIn'
 import { StreakInfoModal } from './StreakInfoModal'
 
 interface WeeklyStreakProps {
@@ -38,6 +39,22 @@ function StreakCardSkeleton() {
 export function WeeklyStreak({ data, rules, isLoading }: WeeklyStreakProps) {
   const { t } = useTranslation()
   const [isModalOpen, setIsModalOpen] = useState(false)
+
+  // Duolingo-style "N day streak" count — consecutive active days walking
+  // backward from today, derived from the same data the day-tiles below
+  // already render (no extra fetch needed).
+  const currentStreakDays = useMemo(() => {
+    if (!data) return 0
+    const inactiveStatuses = new Set(['missed', 'not_joined', 'future'])
+    const todayIndex = data.findIndex((d) => d.isToday)
+    if (todayIndex === -1) return 0
+    let count = 0
+    for (let i = todayIndex; i >= 0; i--) {
+      if (inactiveStatuses.has(data[i].status)) break
+      count++
+    }
+    return count
+  }, [data])
 
   // Show shimmer skeleton while loading
   if (isLoading) {
@@ -76,27 +93,42 @@ export function WeeklyStreak({ data, rules, isLoading }: WeeklyStreakProps) {
           >
             <Info size={16} />
           </button>
+
+          {/* Duolingo-style current streak badge */}
+          {currentStreakDays > 0 && (
+            <span className="flex items-center gap-1 pl-2 pr-2.5 py-1 rounded-full bg-orange-50 dark:bg-orange-950/40 border border-orange-100 dark:border-orange-900/50">
+              <Flame size={13} className="text-orange-500 fill-orange-500" />
+              <span className="text-xs font-extrabold text-orange-600 dark:text-orange-400 tabular-nums">
+                {currentStreakDays}
+              </span>
+            </span>
+          )}
         </div>
 
-        {/* Scroll to AI Summary Button */}
-        <button
-          onClick={() => {
-            document
-              .getElementById('overall-ai-summary-section')
-              ?.scrollIntoView({ behavior: 'smooth' })
-          }}
-          className="group flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-philosophy dark:text-lavender-mist bg-philosophy/5 hover:bg-philosophy/10 dark:bg-lavender-mist/10 dark:hover:bg-lavender-mist/20 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full transition-all active:scale-95"
-          title="Scroll to Siksha Inspire"
-        >
-          <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover:rotate-12 transition-transform" />
-          <span className="hidden sm:inline">
-            {t('common.student_dashboard.view_ai_summary', 'Siksha Inspire')}
-          </span>
-          <span className="inline sm:hidden">
-            {t('common.student_dashboard.ai_summary_short', 'Siksha Summary')}
-          </span>
-          <ArrowDown className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-0.5 opacity-60 group-hover:translate-y-0.5 transition-transform" />
-        </button>
+        {/* Right-side actions */}
+        <div className="flex items-center gap-2">
+          {/* Scroll to AI Summary Button */}
+          <button
+            onClick={() => {
+              document
+                .getElementById('overall-ai-summary-section')
+                ?.scrollIntoView({ behavior: 'smooth' })
+            }}
+            className="group flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-philosophy dark:text-lavender-mist bg-philosophy/5 hover:bg-philosophy/10 dark:bg-lavender-mist/10 dark:hover:bg-lavender-mist/20 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full transition-all active:scale-95"
+            title="Scroll to Siksha Inspire"
+          >
+            <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover:rotate-12 transition-transform" />
+            <span className="hidden sm:inline">
+              {t('common.student_dashboard.view_ai_summary', 'Siksha Inspire')}
+            </span>
+            <span className="inline sm:hidden">
+              {t('common.student_dashboard.ai_summary_short', 'Siksha Summary')}
+            </span>
+            <ArrowDown className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-0.5 opacity-60 group-hover:translate-y-0.5 transition-transform" />
+          </button>
+
+          <StreakReminderOptIn />
+        </div>
       </div>
 
       {/* Streak Grid — responsive grid */}

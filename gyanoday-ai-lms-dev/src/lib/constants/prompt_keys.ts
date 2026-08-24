@@ -7,6 +7,7 @@ export enum PromptKeys {
   PROMPT_SMART_NOTES_GENERATOR = 'PROMPT_SMART_NOTES_GENERATOR',
   PROMPT_STUDENT_OVERALL_SUMMARY = 'PROMPT_STUDENT_OVERALL_SUMMARY',
   PROMPT_QUIZ_RESULT_SUMMARY = 'PROMPT_QUIZ_RESULT_SUMMARY',
+  PROMPT_PARENT_PROGRESS_SUMMARY = 'PROMPT_PARENT_PROGRESS_SUMMARY',
 }
 
 export const PromptVariablesMap: Record<PromptKeys, string[]> = {
@@ -50,5 +51,15 @@ export const PromptVariablesMap: Record<PromptKeys, string[]> = {
     'language',
     'student_name',
     'quiz_data',
+  ],
+  // Professional-tone counterpart to PROMPT_STUDENT_OVERALL_SUMMARY — same
+  // underlying performance data, written for a parent instead of the
+  // student: concrete study-time/consistency and concept-mastery language
+  // rather than celebratory, second-person coaching.
+  [PromptKeys.PROMPT_PARENT_PROGRESS_SUMMARY]: [
+    'language',
+    'student_name',
+    'parent_name',
+    'performance_data',
   ],
 }

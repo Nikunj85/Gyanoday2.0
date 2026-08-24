@@ -81,6 +81,11 @@ export class OpenAIService {
       stream: true,
       temperature: options?.temperature ?? 0.2,
       instructions: options?.instructions,
+      // Explicit, generous ceiling — the Socratic prompt asks for a
+      // structured <internal_thought> before the visible reply, so this
+      // rules out the reply ever being silently cut off mid-thought on a
+      // longer turn.
+      max_output_tokens: 1500,
       tools: [
         {
           type: 'file_search',
@@ -374,12 +379,18 @@ export class OpenAIService {
         await this.getClient().files.delete(fileId)
       }
 
-      return response.output_parsed
+      // The OpenAI SDK infers this via its own internal InferZodType<T>,
+      // which is structurally identical to our z.infer<T> but not provably
+      // so to TypeScript across the two generic paths — safe cast, since
+      // the null-check above already guarantees this is a real parsed value.
+      return response.output_parsed as z.infer<T>
     } catch (error) {
       console.error('Error generating AI response with schema:', error)
       throw error
     }
   }
+
+
 
   async generateTextResultWithSchema<T extends z.ZodTypeAny>(
     prompt: string,
@@ -406,11 +417,11 @@ export class OpenAIService {
         },
       })
 
-      if (!response.output_parsed) {
+            if (!response.output_parsed) {
         throw new Error('OpenAI failed to parse the response into the requested schema.')
       }
 
-      return response.output_parsed
+      return response.output_parsed as z.infer<T>
     } catch (error) {
       console.error('Error generating AI response with schema:', error)
       throw error

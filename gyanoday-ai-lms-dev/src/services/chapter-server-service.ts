@@ -49,9 +49,22 @@ export const chapterServerService = {
       // the cache NEVER persists and every single message re-uploads the
       // file from scratch — a real, serious performance bug, not a
       // harmless fallback.
-      await supabaseAdmin.from('chapters').update({ file_id: fileId }).eq('id', chapterId)
-    } catch {
-      // Only a genuine transient/network failure lands here now.
+      const { error: cacheError } = await supabaseAdmin
+        .from('chapters')
+        .update({ file_id: fileId })
+        .eq('id', chapterId)
+
+      if (cacheError) {
+        console.error(
+          `[ChapterServerService] Failed to cache file_id for chapter ${chapterId}:`,
+          cacheError
+        )
+      }
+    } catch (err) {
+      console.error(
+        `[ChapterServerService] Unexpected error caching file_id for chapter ${chapterId}:`,
+        err
+      )
     }
 
     return fileId
@@ -84,13 +97,29 @@ export const chapterServerService = {
 
     try {
       // Same service-role reasoning as above — this MUST succeed for
-      // students, not just admins, or every message re-indexes from scratch.
-      await supabaseAdmin
+      // students, not just admins, or every message re-indexes from
+      // scratch (visible as every chat reply taking 30-60+ seconds).
+      const { error: cacheError } = await supabaseAdmin
         .from('chapters')
         .update({ vector_store_id: vectorStoreId })
         .eq('id', chapterId)
-    } catch {
-      // Non-critical — still usable this request.
+
+      if (cacheError) {
+        // Don't swallow this silently — an update that keeps failing here
+        // (e.g. the `vector_store_id` column doesn't exist yet) is exactly
+        // why every chat message would be slow AND why nobody would know
+        // why. This log line is the thing to grep for if the chatbot goes
+        // back to being slow/erroring after this fix.
+        console.error(
+          `[ChapterServerService] Failed to cache vector_store_id for chapter ${chapterId}:`,
+          cacheError
+        )
+      }
+    } catch (err) {
+      console.error(
+        `[ChapterServerService] Unexpected error caching vector_store_id for chapter ${chapterId}:`,
+        err
+      )
     }
 
     return vectorStoreId

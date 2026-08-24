@@ -19,13 +19,17 @@ export async function GET(request: Request) {
       // Smart Redirection Logic
       const { data: userProfile } = await supabase
         .from('users')
-        .select('id, class_id')
+        .select('id, class_id, role')
         .eq('id', session.user.id)
         .single()
 
       let redirectUrl = next
 
-      if (userProfile && userProfile.class_id) {
+      if (userProfile?.role === 'parent') {
+        // Parents don't have (or need) a class_id — send them straight to
+        // their own portal instead of the student registration flow.
+        redirectUrl = next === '/register' || next === '/' ? '/parent-dashboard' : next
+      } else if (userProfile && userProfile.class_id) {
         // User exists and has completed profile
         // If they were headed to /register, send them to dashboard instead
         if (next === '/register') {

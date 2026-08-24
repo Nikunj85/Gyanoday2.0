@@ -1,6 +1,7 @@
 export enum UserRole {
   Student = 'student',
   Admin = 'admin',
+  Parent = 'parent',
 }
 
 export enum Language {

@@ -44,6 +44,8 @@ export default function LoginPage() {
         router.push(next)
       } else if (user.role === 'admin') {
         router.push('/mycp')
+      } else if (user.role === 'parent') {
+        router.push('/parent-dashboard')
       } else {
         router.push('/dashboard')
       }
@@ -173,6 +175,8 @@ export default function LoginPage() {
           router.push(next)
         } else if (userData.role === 'admin') {
           router.push('/mycp')
+        } else if (userData.role === 'parent') {
+          router.push('/parent-dashboard')
         } else {
           router.push('/dashboard')
         }

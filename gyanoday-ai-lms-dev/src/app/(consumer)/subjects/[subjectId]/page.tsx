@@ -83,6 +83,23 @@ export default function SubjectDetailPage() {
   const activeChapter = chapters.find((c) => c.id === activeChapterId) || null
   const themeColor = subject?.color_code || '#B188C0'
 
+  // Keep the global chapter store (read by AIChatBot, among others) in
+  // sync with whichever chapter is actually open. Without this, the
+  // chatbot never sees an active chapter — it silently falls back to a
+  // canned, non-AI response instead of the real Socratic tutor, no matter
+  // which chapter page you're on.
+  useEffect(() => {
+    setStoreActiveChapter(activeChapter)
+    setActiveSubjectColor(themeColor)
+
+    // On unmount (navigating away from this subject entirely), clear the
+    // global chapter context so nothing else accidentally treats a stale
+    // chapter as "active".
+    return () => {
+      setStoreActiveChapter(null)
+    }
+  }, [activeChapter, themeColor, setStoreActiveChapter, setActiveSubjectColor])
+
   // Auto-select first chapter
   useEffect(() => {
     if (chapters.length > 0 && !activeChapterId) {

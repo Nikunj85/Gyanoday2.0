@@ -91,4 +91,51 @@ export const userSummaryAiService = {
       throw error
     }
   },
+
+  /**
+   * Generates a professional, parent-facing progress summary — same
+   * category of underlying data as the student summary above (scores,
+   * consistency, chapter completion), but written in the tone a parent
+   * wants: concrete study-time/consistency and concept-mastery language,
+   * not celebratory second-person coaching aimed at the student.
+   */
+  async generateParentSummary(
+    performanceData: Record<string, unknown>,
+    language: string,
+    studentName: string,
+    parentName?: string
+  ): Promise<{ summary: string }> {
+    try {
+      const promptType = PromptKeys.PROMPT_PARENT_PROGRESS_SUMMARY
+      const setting = await settingsService.getSettingBasedOnKey(promptType)
+
+      if (!setting) {
+        console.error(`[UserSummaryAiService] Prompt setting not found: ${promptType}`)
+        throw new Error(`Summary configuration error: Prompt setting not found.`)
+      }
+
+      const prompt = buildPrompt(promptType, setting.value, {
+        language,
+        student_name: studentName,
+        parent_name: parentName || 'there',
+        performance_data: JSON.stringify(performanceData),
+      })
+
+      const aiResponse = await openAIService.generateResult(prompt)
+
+      try {
+        let cleanResponse = aiResponse.replace(/```json\n?|```/g, '').trim()
+        if (cleanResponse.startsWith('"') && cleanResponse.endsWith('"')) {
+          cleanResponse = cleanResponse.substring(1, cleanResponse.length - 1).trim()
+        }
+        const parsedResponse = JSON.parse(cleanResponse)
+        return { summary: parsedResponse.summary || cleanResponse }
+      } catch {
+        return { summary: aiResponse }
+      }
+    } catch (error) {
+      console.error(`[UserSummaryAiService] Error in generateParentSummary:`, error)
+      throw error
+    }
+  },
 }

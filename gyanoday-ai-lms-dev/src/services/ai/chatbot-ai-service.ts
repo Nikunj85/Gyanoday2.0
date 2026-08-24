@@ -150,7 +150,31 @@ export const chatbotAiService = {
     // Filter is applied here, at the single point every streamed answer
     // passes through, so the student-facing side of the app can never
     // accidentally see unfiltered reasoning.
-    yield* filterHiddenReasoning(rawStream())
+    //
+    // RELIABILITY NOTE: the model is instructed to always start with
+    // <internal_thought>. If generation gets cut off or malformed before
+    // it ever reaches <student_facing_response>, the filter has nothing
+    // safe to show — and previously that meant the student saw a
+    // generic, unexplained "an error occurred" with zero chunks streamed.
+    // Since NOTHING has been sent to the client yet in that case, it's
+    // always safe to retry the whole generation once before giving up.
+    let yieldedAnything = false
+    for await (const chunk of filterHiddenReasoning(rawStream())) {
+      yieldedAnything = true
+      yield chunk
+    }
+
+    if (!yieldedAnything) {
+      let retryYieldedAnything = false
+      for await (const chunk of filterHiddenReasoning(rawStream())) {
+        retryYieldedAnything = true
+        yield chunk
+      }
+
+      if (!retryYieldedAnything) {
+        yield "Sorry, I had trouble putting together a reply just now — could you ask that again?"
+      }
+    }
   },
 
   /**

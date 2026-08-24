@@ -61,8 +61,14 @@ export async function POST(req: NextRequest) {
           controller.enqueue(encoder.encode(chunk))
         }
       } catch (error) {
+        // This log is the actual point of the fix — previously nothing
+        // was logged here at all, so a real OpenAI/API failure (bad key,
+        // quota, invalid vector store, etc.) was completely invisible on
+        // the server side. Check your terminal for this line.
+        console.error('[api/chatbot/stream] ERROR generating chatbot response:', error)
+
         const message =
-          error instanceof Error
+          error instanceof Error && error.message
             ? error.message
             : 'An unexpected error occurred while generating the chatbot response.'
         // Emit a marker the client can detect and surface as an error toast,

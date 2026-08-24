@@ -70,7 +70,14 @@ export async function middleware(request: NextRequest) {
   }
 
   // Define protected consumer routes
-  const protectedRoutes = ['/dashboard', '/student-dashboard', '/subjects', '/quiz', '/profile']
+  const protectedRoutes = [
+    '/dashboard',
+    '/student-dashboard',
+    '/subjects',
+    '/quiz',
+    '/profile',
+    '/parent-dashboard',
+  ]
   const isProtectedRoute = protectedRoutes.some((route) =>
     request.nextUrl.pathname.startsWith(route)
   )
@@ -81,12 +88,27 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl)
   }
 
-  // Redirect authenticated users away from auth pages
+  // Redirect authenticated users away from auth pages, and steer parent
+  // accounts away from student-only surfaces — a parent has no class_id
+  // or quiz progress, so those pages don't make sense for them.
   const authRoutes = ['/login']
   const isAuthRoute = authRoutes.some((route) => request.nextUrl.pathname.startsWith(route))
+  const studentOnlyRoutes = ['/dashboard', '/student-dashboard', '/subjects', '/quiz']
+  const isStudentOnlyRoute = studentOnlyRoutes.some((route) =>
+    request.nextUrl.pathname.startsWith(route)
+  )
 
-  if (isAuthRoute && user) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+  if (user && (isAuthRoute || isStudentOnlyRoute)) {
+    const { data: userData } = await supabase.from('users').select('role').eq('id', user.id).single()
+
+    if (isAuthRoute) {
+      return NextResponse.redirect(
+        new URL(userData?.role === 'parent' ? '/parent-dashboard' : '/dashboard', request.url)
+      )
+    }
+    if (isStudentOnlyRoute && userData?.role === 'parent') {
+      return NextResponse.redirect(new URL('/parent-dashboard', request.url))
+    }
   }
 
   return response

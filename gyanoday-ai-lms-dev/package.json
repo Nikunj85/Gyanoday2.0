@@ -56,6 +56,7 @@
     "tailwind-merge": "^3.4.0",
     "tesseract.js": "^5.1.1",
     "unpdf": "^1.4.0",
+    "web-push": "^3.6.7",
     "yup": "^1.7.1",
     "zod": "^4.2.1",
     "zustand": "^5.0.9"
@@ -66,6 +67,7 @@
     "@types/pdf-parse": "^1.1.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/web-push": "^3.6.4",
     "autoprefixer": "^10.4.23",
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",

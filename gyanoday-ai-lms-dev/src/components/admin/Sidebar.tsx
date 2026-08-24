@@ -9,6 +9,7 @@ import {
   LogOut,
   MessageCircle,
   Settings,
+  UserCog,
   Users,
   X,
 } from 'lucide-react'
@@ -42,6 +43,7 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
     { id: 'subjects', icon: Library, label: 'Subjects', href: '/mycp/subjects' },
     { id: 'chapters', icon: ListOrdered, label: 'Chapters', href: '/mycp/chapters' },
     { id: 'students', icon: Users, label: 'Students', href: '/mycp/students' },
+    { id: 'parents', icon: UserCog, label: 'Parents', href: '/mycp/parents' },
     { id: 'contacts', icon: MessageCircle, label: 'Contacts', href: '/mycp/contacts' },
   ]
 
