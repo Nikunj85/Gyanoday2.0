@@ -193,27 +193,27 @@ export default function SubjectDetailPage() {
               <TopicQuizLauncher chapterId={activeChapter.id} userId={user?.id} />
             </div>
 
-            <div className="flex w-full sm:w-auto items-center justify-end rounded-xl border border-neutral-200 dark:border-neutral-800 p-1 bg-white dark:bg-neutral-950 shadow-sm">
+            <div className="flex w-full sm:w-auto items-center justify-end gap-1 rounded-xl border border-neutral-200 dark:border-neutral-800 p-1 bg-white dark:bg-neutral-950 shadow-sm">
               <button
                 onClick={() => setContentView('pdf')}
-                className={`flex min-h-11 flex-1 sm:flex-none items-center justify-center gap-2 px-4 md:px-5 rounded-lg text-sm md:text-base font-extrabold transition-all whitespace-nowrap ${
+                className={`flex min-h-10 flex-1 sm:flex-none items-center justify-center gap-1.5 px-3 md:px-4 rounded-lg text-xs md:text-sm font-bold transition-all whitespace-nowrap ${
                   contentView === 'pdf'
                     ? 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 shadow-sm'
                     : 'text-neutral-500 hover:text-neutral-800 dark:text-neutral-400'
                 }`}
               >
-                <FileText size={12} />
+                <FileText size={16} />
                 Chapter PDF
               </button>
               <button
                 onClick={handleSmartNotesClick}
-                className={`flex min-h-11 flex-1 sm:flex-none items-center justify-center gap-2 px-4 md:px-5 rounded-lg text-xs md:text-base font-extrabold transition-all whitespace-nowrap ${
+                className={`flex min-h-10 flex-1 sm:flex-none items-center justify-center gap-1.5 px-3 md:px-4 rounded-lg text-xs md:text-sm font-bold transition-all whitespace-nowrap ${
                   contentView === 'smart-notes'
                     ? 'bg-indigo-600 text-white shadow-sm'
                     : 'text-neutral-500 hover:text-indigo-600 dark:text-neutral-400'
                 }`}
               >
-                <Sparkles size={12} className="text-amber-300 fill-amber-300" />
+                <Sparkles size={16} className="text-amber-300 fill-amber-300" />
                 Active-Recall Smart Notes
               </button>
             </div>

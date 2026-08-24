@@ -25,6 +25,10 @@ export interface SubjectProgressOverview {
   chapters: ChapterMasteryNode[]
   completedCount: number
   totalCount: number
+  progressPct: number
+  strengths: string[]
+  weaknesses: string[]
+  revisionTopics: string[]
 }
 
 export interface WeakConcept {
@@ -186,13 +190,55 @@ export async function getStudentProgressOverview(
         }
       })
 
+      const completedCount = chapterNodes.filter((c) => c.isCompleted).length
+      const totalCount = chapterNodes.length
+
+      // Build subject-level learning signals from the latest insight for each
+      // chapter. Strengths are chapters with strong mastery (85%+), while
+      // weaknesses are chapters that still need practice/revision. The AI
+      // weak areas become the concrete topics the student should revise.
+      const strengths = chapterNodes
+        .filter((c) => c.masteryLevel === 'strong')
+        .sort((a, b) => (b.lastScorePct ?? 0) - (a.lastScorePct ?? 0))
+        .slice(0, 3)
+        .map((c) => c.title)
+
+      const weaknesses = chapterNodes
+        .filter((c) => c.masteryLevel === 'needs_revision' || c.masteryLevel === 'needs_practice')
+        .sort((a, b) => (a.lastScorePct ?? 0) - (b.lastScorePct ?? 0))
+        .slice(0, 3)
+        .map((c) => c.title)
+
+      const revisionTopicTally = new Map<string, { count: number; display: string }>()
+      subjectChapters.forEach((ch: any) => {
+        const insight = latestInsightByChapter.get(ch.id)
+        const weakAreas: string[] = Array.isArray(insight?.weak_areas) ? insight.weak_areas : []
+        weakAreas.forEach((raw) => {
+          const topic = String(raw || '').trim()
+          if (!topic) return
+          const key = topic.toLowerCase()
+          const existing = revisionTopicTally.get(key)
+          if (existing) existing.count++
+          else revisionTopicTally.set(key, { count: 1, display: topic })
+        })
+      })
+
+      const revisionTopics = Array.from(revisionTopicTally.values())
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 4)
+        .map((v) => v.display)
+
       return {
         id: subject.id,
         name: subject.name,
         colorCode: subject.color_code,
         chapters: chapterNodes,
-        completedCount: chapterNodes.filter((c) => c.isCompleted).length,
-        totalCount: chapterNodes.length,
+        completedCount,
+        totalCount,
+        progressPct: totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0,
+        strengths,
+        weaknesses,
+        revisionTopics,
       }
     })
     .filter((s): s is SubjectProgressOverview => s !== null)
