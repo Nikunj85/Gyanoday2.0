@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { TopicQuizLauncher } from '@/components/common/TopicQuizLauncher'
 import { Subject } from '@/types'
 
 interface ChapterPerformance {
@@ -34,6 +35,10 @@ interface SubjectHeaderProps {
   onSummaryClick?: () => void // Added to open summary dialog from parent
   chapterPerformance?: ChapterPerformance
   weakTopics?: WeakTopic[]
+  /** Needed to render the "Practice a Topic" launcher directly in the
+   * header button stack, in place of the old plain "Quiz Time" button. */
+  activeChapterId?: string
+  userId?: string
 }
 
 export function SubjectHeader({
@@ -49,6 +54,8 @@ export function SubjectHeader({
   onSummaryClick,
   chapterPerformance,
   weakTopics,
+  activeChapterId,
+  userId,
 }: SubjectHeaderProps) {
   const { t } = useTranslation()
   const progress = totalChapters > 0 ? (completedChapters / totalChapters) * 100 : 0
@@ -197,14 +204,14 @@ export function SubjectHeader({
               >
                 {t('common.subject_header.smart_summary')}
               </button>
-              <button
-                onClick={onQuizClick}
-                className="border-2 border-white text-white px-6 py-1.5 cursor-pointer rounded-xl font-bold text-xs xl:text-sm hover:bg-white/10 transition-all whitespace-nowrap min-w-[140px]"
-              >
-                {activeChapterTitle
-                  ? t('common.subject_header.test_time')
-                  : t('common.subject_header.select_chapter_test')}
-              </button>
+              {activeChapterId && (
+                <TopicQuizLauncher
+                  chapterId={activeChapterId}
+                  userId={userId}
+                  variant="header-outline"
+                  onStartFullQuiz={onQuizClick}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -270,14 +277,15 @@ export function SubjectHeader({
               >
                 {t('common.subject_header.summary')}
               </button>
-              <button
-                onClick={onQuizClick}
-                className="flex-1 bg-white/20 text-white py-2 cursor-pointer rounded-lg text-[10px] font-black uppercase tracking-wider border border-white/30"
-              >
-                {activeChapterTitle
-                  ? t('common.subject_header.test_time')
-                  : t('common.subject_header.select_chapter_test')}
-              </button>
+              {activeChapterId && (
+                <TopicQuizLauncher
+                  chapterId={activeChapterId}
+                  userId={userId}
+                  variant="header-outline"
+                  onStartFullQuiz={onQuizClick}
+                  className="flex-1 !min-w-0 !py-2 !text-[10px] !font-black uppercase tracking-wider !border-white/30 !rounded-lg"
+                />
+              )}
             </div>
           </div>
         </div>

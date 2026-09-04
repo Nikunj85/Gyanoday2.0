@@ -1,6 +1,6 @@
 'use client'
 
-import { CheckCircle2, Sparkles, Target, TrendingDown, X } from 'lucide-react'
+import { CheckCircle2, Repeat, Sparkles, Target, TrendingDown, TrendingUp, Trophy, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -73,7 +73,16 @@ export function SmartSummaryDialog({
         className="relative w-full max-w-[900px] max-h-[82vh] flex flex-col"
       >
         <div className="flex min-h-0 flex-col overflow-hidden rounded-[32px] bg-white dark:bg-neutral-900 shadow-2xl border border-white/70 dark:border-neutral-800">
-          <div className="relative shrink-0 border-b border-neutral-100 dark:border-neutral-800 px-6 md:px-9 pt-6 md:pt-7 pb-5">
+          <div
+            className="relative shrink-0 border-b border-neutral-100 dark:border-neutral-800 px-6 md:px-9 pt-6 md:pt-7 pb-5 overflow-hidden"
+            style={{
+              background: `linear-gradient(135deg, ${themeColor}14 0%, ${themeColor}05 60%, transparent 100%)`,
+            }}
+          >
+            <div
+              className="absolute -top-10 -right-10 w-40 h-40 rounded-full blur-3xl opacity-30 pointer-events-none"
+              style={{ backgroundColor: themeColor }}
+            />
             <button
               onClick={onClose}
               aria-label="Close smart summary"
@@ -82,7 +91,7 @@ export function SmartSummaryDialog({
               <X size={22} className="text-neutral-400" />
             </button>
 
-            <div className="flex flex-col gap-4 pr-10 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-4 pr-10 sm:flex-row sm:items-center sm:justify-between relative z-10">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 mb-1.5">
                   <div
@@ -138,9 +147,24 @@ export function SmartSummaryDialog({
             ) : (
               <div className="space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <InsightMetric label="Average" value={`${performance.averagePct}%`} />
-                  <InsightMetric label="Best score" value={`${performance.bestPct}%`} />
-                  <InsightMetric label="Attempts" value={`${performance.attempts}`} />
+                  <InsightMetric
+                    label="Average"
+                    value={`${performance.averagePct}%`}
+                    icon={<TrendingUp size={16} />}
+                    themeColor={themeColor}
+                  />
+                  <InsightMetric
+                    label="Best score"
+                    value={`${performance.bestPct}%`}
+                    icon={<Trophy size={16} />}
+                    themeColor={themeColor}
+                  />
+                  <InsightMetric
+                    label="Attempts"
+                    value={`${performance.attempts}`}
+                    icon={<Repeat size={16} />}
+                    themeColor={themeColor}
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -205,10 +229,30 @@ export function SmartSummaryDialog({
   )
 }
 
-function InsightMetric({ label, value }: { label: string; value: string }) {
+function InsightMetric({
+  label,
+  value,
+  icon,
+  themeColor,
+}: {
+  label: string
+  value: string
+  icon?: React.ReactNode
+  themeColor?: string
+}) {
   return (
     <div className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-800/50 px-4 py-4">
-      <p className="text-xs font-bold uppercase tracking-wider text-neutral-400">{label}</p>
+      <div className="flex items-center gap-2 mb-1">
+        {icon && (
+          <span
+            className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0"
+            style={{ backgroundColor: `${themeColor}1a`, color: themeColor }}
+          >
+            {icon}
+          </span>
+        )}
+        <p className="text-xs font-bold uppercase tracking-wider text-neutral-400">{label}</p>
+      </div>
       <p className="mt-1 text-2xl font-black text-neutral-900 dark:text-white">{value}</p>
     </div>
   )

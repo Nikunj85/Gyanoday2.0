@@ -23,6 +23,12 @@ interface TopicQuizLauncherProps {
   userId?: string
   /** Full-chapter quiz launch, so this component reuses the same entry point styling. */
   onStartFullQuiz?: () => void
+  /** 'gradient' (default) is the purple pill used in the toolbar row.
+   * 'header-outline' matches the white-outline pill buttons used inside
+   * SubjectHeader's purple banner, so this can drop in as a replacement
+   * for the old plain "Quiz Time" button without looking out of place. */
+  variant?: 'gradient' | 'header-outline'
+  className?: string
 }
 
 /**
@@ -32,7 +38,13 @@ interface TopicQuizLauncherProps {
  * (see concept-insight-service.ts) — this is the "recommends targeted
  * revision" part of the Cognitive Quiz Matrix feature.
  */
-export function TopicQuizLauncher({ chapterId, userId, onStartFullQuiz }: TopicQuizLauncherProps) {
+export function TopicQuizLauncher({
+  chapterId,
+  userId,
+  onStartFullQuiz,
+  variant = 'gradient',
+  className,
+}: TopicQuizLauncherProps) {
   const router = useRouter()
   const initQuiz = useQuizStore((s) => s.initQuiz)
   const [isOpen, setIsOpen] = useState(false)
@@ -75,17 +87,15 @@ export function TopicQuizLauncher({ chapterId, userId, onStartFullQuiz }: TopicQ
       <SheetTrigger asChild>
         <button
           className={cn(
-            'group relative flex items-center justify-center gap-1.5 h-10 pl-3.5 pr-3 rounded-xl text-sm font-bold text-white shadow-sm transition-all active:scale-95 hover:shadow-md',
-            'bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 hover:from-indigo-500 hover:via-violet-500 hover:to-purple-500'
+            'group relative flex items-center justify-center gap-1.5 h-10 pl-3.5 pr-3 rounded-xl text-sm font-bold shadow-sm transition-all active:scale-95 hover:shadow-md',
+            variant === 'gradient' &&
+              'text-white bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 hover:from-indigo-500 hover:via-violet-500 hover:to-purple-500',
+            variant === 'header-outline' &&
+              'border-2 border-white text-white h-auto py-1.5 justify-center rounded-xl font-bold text-xs xl:text-sm hover:bg-white/10 whitespace-nowrap min-w-[140px] shadow-none',
+            className
           )}
         >
-          <Target size={16} className="shrink-0" />
           <span>Practice a Topic</span>
-          {recommended.length > 0 && (
-            <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-white/25 text-[11px] font-bold tabular-nums">
-              {recommended.length}
-            </span>
-          )}
         </button>
       </SheetTrigger>
 

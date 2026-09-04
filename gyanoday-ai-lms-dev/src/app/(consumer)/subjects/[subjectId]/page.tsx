@@ -8,9 +8,10 @@ import { useEffect, useState } from 'react'
 import { generateAndSaveSmartNotes } from '@/app/actions/smart-notes-actions'
 import { getRecommendedTopics } from '@/app/actions/concept-actions'
 import { SmartNotesRenderer } from '@/components/common/SmartNotesRenderer'
-import { TopicQuizLauncher } from '@/components/common/TopicQuizLauncher'
 import { Button } from '@/components/ui/button'
+import { toast } from '@/components/ui/use-toast'
 import { MotionContainer, MotionWrapper } from '@/lib/animations/MotionWrapper'
+import { getFriendlyErrorMessage } from '@/lib/utils/error-messages'
 import { chapterService } from '@/services/chapter-service'
 import { quizService } from '@/services/quiz-service'
 import { quizAttemptsService } from '@/services/quiz-attempts-service'
@@ -150,6 +151,15 @@ export default function SubjectDetailPage() {
         await queryClient.invalidateQueries({ queryKey: ['chapters', subjectId] })
       } catch (err) {
         console.error('Failed to auto-generate notes:', err)
+        // Previously this failed completely silently from the student's
+        // point of view — they'd just see "No Smart Notes Available"
+        // forever with zero explanation. Now they get a clear,
+        // non-technical reason and can retry.
+        toast({
+          title: "Couldn't generate Smart Notes",
+          description: getFriendlyErrorMessage(err),
+          variant: 'destructive',
+        })
       } finally {
         setIsGenerating(false)
       }
@@ -172,6 +182,8 @@ export default function SubjectDetailPage() {
           onSummaryClick={() => setIsSummaryOpen(true)} // Opens Smart Summary dialog
           chapterPerformance={chapterPerformance}
           weakTopics={chapterWeakTopics}
+          activeChapterId={activeChapter?.id}
+          userId={user?.id}
           onQuizClick={() => {
             if (activeChapter) {
               initQuiz({ chapterId: activeChapter.id, isReviewMode: false })
@@ -187,12 +199,8 @@ export default function SubjectDetailPage() {
         {activeChapter && (
           <MotionWrapper
             animation="fadeInUp"
-            className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-neutral-100/60 dark:bg-neutral-900/60 border border-neutral-200/80 dark:border-neutral-800 rounded-2xl backdrop-blur-sm"
+            className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3 p-3 bg-neutral-100/60 dark:bg-neutral-900/60 border border-neutral-200/80 dark:border-neutral-800 rounded-2xl backdrop-blur-sm"
           >
-            <div className="shrink-0">
-              <TopicQuizLauncher chapterId={activeChapter.id} userId={user?.id} />
-            </div>
-
             <div className="flex w-full sm:w-auto items-center justify-end gap-1 rounded-xl border border-neutral-200 dark:border-neutral-800 p-1 bg-white dark:bg-neutral-950 shadow-sm">
               <button
                 onClick={() => setContentView('pdf')}
