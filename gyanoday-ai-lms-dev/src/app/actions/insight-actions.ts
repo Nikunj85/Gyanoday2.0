@@ -30,10 +30,17 @@ export async function generateAndSaveInsight(
       weak_areas: aiResponse.weak_areas,
       score_context: {
         quiz_score: score,
+        // This was previously missing — every downstream percentage
+        // calculation (dashboard Strength/Weakness, chapter mastery
+        // level, etc.) needs BOTH quiz_score and total_questions to
+        // compute a %, so without this every insight ever saved was
+        // functionally useless for that purpose despite having a real
+        // score behind it.
+        total_questions: totalQuestions ?? 0,
         avg_score: aiResponse.derivedStats.avg_score,
         attempts: aiResponse.derivedStats.attempts,
         time: time,
-      },
+      } as Parameters<typeof insightServerService.saveInsight>[0]['score_context'],
     })
 
     return aiResponse

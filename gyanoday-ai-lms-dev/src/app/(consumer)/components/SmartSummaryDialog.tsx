@@ -1,6 +1,7 @@
 'use client'
 
-import { CheckCircle2, Repeat, Sparkles, Target, TrendingDown, TrendingUp, Trophy, X } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { CheckCircle2, Repeat, Sparkles, Target, TrendingDown, Trophy, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -137,79 +138,100 @@ export function SmartSummaryDialog({
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-6 md:px-9 py-6">
-            {mode === 'summary' ? (
-              <div className="max-w-3xl">
-                <MarkdownRenderer
-                  content={description || 'No summary available for this chapter yet.'}
-                  className="text-neutral-600 dark:text-neutral-300 text-base md:text-lg leading-relaxed font-medium prose-p:text-neutral-600 dark:prose-p:text-neutral-300 prose-headings:text-neutral-900 dark:prose-headings:text-white"
-                />
-              </div>
-            ) : (
-              <div className="space-y-5">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <InsightMetric
-                    label="Average"
-                    value={`${performance.averagePct}%`}
-                    icon={<TrendingUp size={16} />}
-                    themeColor={themeColor}
+            <AnimatePresence mode="wait">
+              {mode === 'summary' ? (
+                <motion.div
+                  key="summary"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.18 }}
+                  className="max-w-3xl"
+                >
+                  <MarkdownRenderer
+                    content={description || 'No summary available for this chapter yet.'}
+                    className="text-neutral-600 dark:text-neutral-300 text-base md:text-lg leading-relaxed font-medium prose-p:text-neutral-600 dark:prose-p:text-neutral-300 prose-headings:text-neutral-900 dark:prose-headings:text-white"
                   />
-                  <InsightMetric
-                    label="Best score"
-                    value={`${performance.bestPct}%`}
-                    icon={<Trophy size={16} />}
-                    themeColor={themeColor}
-                  />
-                  <InsightMetric
-                    label="Attempts"
-                    value={`${performance.attempts}`}
-                    icon={<Repeat size={16} />}
-                    themeColor={themeColor}
-                  />
-                </div>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="strengths"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.18 }}
+                  className="space-y-5"
+                >
+                  <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr_1fr] gap-3 items-stretch">
+                    <ScoreRing value={performance.averagePct} themeColor={themeColor} hasAttempts={hasAttempts} />
+                    <InsightMetric
+                      label="Best score"
+                      value={`${performance.bestPct}%`}
+                      icon={<Trophy size={16} />}
+                      themeColor={themeColor}
+                    />
+                    <InsightMetric
+                      label="Attempts"
+                      value={`${performance.attempts}`}
+                      icon={<Repeat size={16} />}
+                      themeColor={themeColor}
+                    />
+                  </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <section className="rounded-2xl border border-emerald-100 bg-emerald-50/70 dark:border-emerald-900/40 dark:bg-emerald-950/20 p-5">
-                    <div className="flex items-center gap-2 mb-3">
-                      <CheckCircle2 size={19} className="text-emerald-600" />
-                      <h3 className="text-base font-black text-emerald-800 dark:text-emerald-300">Strengths</h3>
-                    </div>
-                    <p className="text-sm md:text-base leading-relaxed font-medium text-emerald-900/80 dark:text-emerald-200/80">
-                      {strengthMessage}
-                    </p>
-                    {hasAttempts && performance.bestPct >= performance.averagePct && (
-                      <div className="mt-4 flex items-center gap-2 text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                        <Target size={14} />
-                        Best recorded score: {performance.bestPct}%
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <section className="rounded-2xl border border-emerald-100 bg-emerald-50/70 dark:border-emerald-900/40 dark:bg-emerald-950/20 p-5">
+                      <div className="flex items-center gap-2 mb-3">
+                        <CheckCircle2 size={19} className="text-emerald-600" />
+                        <h3 className="text-base font-black text-emerald-800 dark:text-emerald-300">Strengths</h3>
                       </div>
-                    )}
-                  </section>
-
-                  <section className="rounded-2xl border border-rose-100 bg-rose-50/70 dark:border-rose-900/40 dark:bg-rose-950/20 p-5">
-                    <div className="flex items-center gap-2 mb-3">
-                      <TrendingDown size={19} className="text-rose-600" />
-                      <h3 className="text-base font-black text-rose-800 dark:text-rose-300">Weaknesses</h3>
-                    </div>
-                    {weaknesses.length ? (
-                      <div className="flex flex-wrap gap-2">
-                        {weaknesses.map((item) => (
-                          <span
-                            key={item.topic}
-                            className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-white/80 px-3 py-1.5 text-sm font-bold text-rose-700 dark:border-rose-800 dark:bg-rose-950/30 dark:text-rose-300"
-                          >
-                            {item.topic}
-                            {item.timesFlagged > 1 && <span className="opacity-60">×{item.timesFlagged}</span>}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm md:text-base leading-relaxed font-medium text-rose-900/70 dark:text-rose-200/70">
-                        No recurring weak topics have been flagged yet. Keep practicing to build a stronger picture of your performance.
+                      <p className="text-sm md:text-base leading-relaxed font-medium text-emerald-900/80 dark:text-emerald-200/80">
+                        {strengthMessage}
                       </p>
-                    )}
-                  </section>
-                </div>
-              </div>
-            )}
+                      {hasAttempts && (
+                        <div className="mt-4">
+                          <div className="h-1.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-emerald-500 transition-all duration-700"
+                              style={{ width: `${performance.averagePct}%` }}
+                            />
+                          </div>
+                          {performance.bestPct >= performance.averagePct && (
+                            <div className="mt-3 flex items-center gap-2 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                              <Target size={14} />
+                              Best recorded score: {performance.bestPct}%
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </section>
+
+                    <section className="rounded-2xl border border-rose-100 bg-rose-50/70 dark:border-rose-900/40 dark:bg-rose-950/20 p-5">
+                      <div className="flex items-center gap-2 mb-3">
+                        <TrendingDown size={19} className="text-rose-600" />
+                        <h3 className="text-base font-black text-rose-800 dark:text-rose-300">Weaknesses</h3>
+                      </div>
+                      {weaknesses.length ? (
+                        <div className="flex flex-wrap gap-2">
+                          {weaknesses.map((item) => (
+                            <span
+                              key={item.topic}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-white/80 px-3 py-1.5 text-sm font-bold text-rose-700 dark:border-rose-800 dark:bg-rose-950/30 dark:text-rose-300"
+                            >
+                              {item.topic}
+                              {item.timesFlagged > 1 && <span className="opacity-60">×{item.timesFlagged}</span>}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm md:text-base leading-relaxed font-medium text-rose-900/70 dark:text-rose-200/70">
+                          No recurring weak topics have been flagged yet. Keep practicing to build a stronger picture of your performance.
+                        </p>
+                      )}
+                    </section>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           <div className="shrink-0 px-6 md:px-9 py-4 flex items-center justify-between gap-4" style={{ backgroundColor: themeColor }}>
@@ -225,6 +247,57 @@ export function SmartSummaryDialog({
           </div>
         </div>
       </MotionWrapper>
+    </div>
+  )
+}
+
+function ScoreRing({
+  value,
+  themeColor,
+  hasAttempts,
+}: {
+  value: number
+  themeColor?: string
+  hasAttempts: boolean
+}) {
+  const radius = 30
+  const circumference = 2 * Math.PI * radius
+  const progress = hasAttempts ? Math.min(Math.max(value, 0), 100) : 0
+  const offset = circumference - (progress / 100) * circumference
+
+  return (
+    <div className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-800/50 px-4 py-4 flex sm:flex-col items-center gap-4 sm:gap-2 sm:justify-center sm:min-w-[128px]">
+      <div className="relative w-[76px] h-[76px] shrink-0">
+        <svg viewBox="0 0 76 76" className="w-full h-full -rotate-90">
+          <circle
+            cx="38"
+            cy="38"
+            r={radius}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="7"
+            className="text-neutral-200 dark:text-neutral-700"
+          />
+          <circle
+            cx="38"
+            cy="38"
+            r={radius}
+            fill="none"
+            stroke={themeColor}
+            strokeWidth="7"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            style={{ transition: 'stroke-dashoffset 0.7s ease-out' }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-base font-black text-neutral-900 dark:text-white">
+            {hasAttempts ? `${value}%` : '—'}
+          </span>
+        </div>
+      </div>
+      <p className="text-xs font-bold uppercase tracking-wider text-neutral-400 sm:text-center">Average</p>
     </div>
   )
 }

@@ -11,8 +11,8 @@ import { useUserStore } from '@/store/user-store'
 
 import { MotivationQuote } from '../components/MotivationQuote'
 import { DashboardHeader } from '../components/DashboardHeader'
-import { NotesSection } from '../components/NotesSection'
 import { StudyTimeChart } from '../components/StudyTimeChart'
+import { SubjectChapterList } from '../components/SubjectChapterList'
 import { SubjectsProgressList } from '../components/SubjectsProgressList'
 import { WeeklyStreak } from '../components/WeeklyStreak'
 
@@ -90,10 +90,10 @@ export default function DashboardPage() {
           <StudyTimeChart data={studyTimeByDay} monthlyData={studyTimeByWeek} />
         </MotionWrapper>
 
-        {/* Personal notes */}
+        {/* All subjects -> all chapters, with per-chapter Note + Revision star */}
         {user?.id && (
           <MotionWrapper animation="fadeInUp" delay={0.25}>
-            <NotesSection userId={user.id} />
+            <SubjectChapterList subjects={subjects} userId={user.id} />
           </MotionWrapper>
         )}
 

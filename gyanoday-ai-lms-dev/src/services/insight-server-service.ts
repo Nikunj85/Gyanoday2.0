@@ -8,6 +8,7 @@ export interface InsightData {
   weak_areas: string[]
   score_context: {
     quiz_score: number
+    total_questions: number
     avg_score: number
     attempts: number
     time: string
