@@ -97,6 +97,30 @@ export default function SubjectDetailPage() {
   const completedChapterIds =
     progressData?.filter((p) => p.is_completed).map((p) => p.chapter_id) || []
 
+  // Marking a chapter complete/incomplete — previously this had no
+  // mutation wired to it anywhere at all, on the sidebar checkbox OR the
+  // header's "Completed" toggle, so both were purely decorative.
+  const toggleCompletionMutation = useMutation({
+    mutationFn: ({ chapterId, next }: { chapterId: string; next: boolean }) =>
+      userProgressService.toggleCompletion(user!.id, chapterId, next),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-progress', user?.id, subjectId] })
+      queryClient.invalidateQueries({ queryKey: ['student-progress-overview'] })
+    },
+    onError: (err) => {
+      toast({
+        title: "Couldn't update completion status",
+        description: getFriendlyErrorMessage(err),
+        variant: 'destructive',
+      })
+    },
+  })
+
+  const handleToggleCompletion = (chapterId: string, next: boolean) => {
+    if (!user?.id) return
+    toggleCompletionMutation.mutate({ chapterId, next })
+  }
+
   const activeChapter = chapters.find((c) => c.id === activeChapterId) || null
   const themeColor = subject?.color_code || '#B188C0'
 
@@ -184,6 +208,11 @@ export default function SubjectDetailPage() {
           weakTopics={chapterWeakTopics}
           activeChapterId={activeChapter?.id}
           userId={user?.id}
+          onCompleteClick={() => {
+            if (activeChapter) {
+              handleToggleCompletion(activeChapter.id, !completedChapterIds.includes(activeChapter.id))
+            }
+          }}
           onQuizClick={() => {
             if (activeChapter) {
               initQuiz({ chapterId: activeChapter.id, isReviewMode: false })
@@ -235,8 +264,9 @@ export default function SubjectDetailPage() {
               chapters={chapters}
               activeChapterId={activeChapterId}
               completedChapterIds={completedChapterIds}
-              chapterProgress={[]}
+              testCounts={attemptsData || {}}
               onChapterSelect={setActiveChapterId}
+              onToggleCompletion={handleToggleCompletion}
               themeColor={themeColor}
             />
           </MotionWrapper>
