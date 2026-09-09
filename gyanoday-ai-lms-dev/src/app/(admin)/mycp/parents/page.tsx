@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/use-toast'
 import { parentLinkService } from '@/services/parent-link-service'
-import { UserRole } from '@/types/users'
 
 export default function ParentsPage() {
   const queryClient = useQueryClient()
@@ -17,7 +16,6 @@ export default function ParentsPage() {
   const [parentSearch, setParentSearch] = useState('')
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
   const [selectedParentId, setSelectedParentId] = useState<string | null>(null)
-  const [showPromoteHint, setShowPromoteHint] = useState(false)
 
   const { data: links, isLoading: isLoadingLinks } = useQuery({
     queryKey: ['parent-links'],
@@ -26,13 +24,13 @@ export default function ParentsPage() {
 
   const { data: studentResults, isLoading: isSearchingStudents } = useQuery({
     queryKey: ['user-search', 'student-picker', studentSearch],
-    queryFn: () => parentLinkService.searchUsers(studentSearch),
+    queryFn: () => parentLinkService.searchStudentUsers(studentSearch),
     enabled: studentSearch.length >= 2,
   })
 
   const { data: parentResults, isLoading: isSearchingParents } = useQuery({
     queryKey: ['user-search', 'parent-picker', parentSearch],
-    queryFn: () => parentLinkService.searchUsers(parentSearch),
+    queryFn: () => parentLinkService.searchParentUsers(parentSearch),
     enabled: parentSearch.length >= 2,
   })
 
@@ -48,12 +46,11 @@ export default function ParentsPage() {
   const linkMutation = useMutation({
     mutationFn: async () => {
       if (!selectedParentId || !selectedStudentId) return
-      // Promote to `parent` role if this account isn't already one — an
-      // admin can turn any existing (already-authenticated) account into
-      // a parent account this way, no separate signup flow needed.
-      if (selectedParent && selectedParent.role !== UserRole.Parent) {
-        await parentLinkService.promoteToParent(selectedParentId)
+      if (selectedParentId === selectedStudentId) {
+        throw new Error('A parent account must be different from the student account.')
       }
+      // Only real parent accounts can be linked. Student accounts are never
+      // promoted here because doing so removes them from Student Management.
       await parentLinkService.createLink(selectedParentId, selectedStudentId)
     },
     onSuccess: () => {
@@ -94,9 +91,8 @@ export default function ParentsPage() {
           Parent Portal Access
         </h1>
         <p className="text-sm text-slate-500 mt-1">
-          Turn an existing account into a parent account and link it to their child. The parent
-          must have signed in at least once already — this just grants them portal access to a
-          specific student.
+          Link an existing parent account to a specific student. Parent and student must use
+          separate accounts; a student account cannot be converted into a parent account.
         </p>
       </div>
 
@@ -130,7 +126,6 @@ export default function ParentsPage() {
                   value={parentSearch}
                   onChange={(e) => {
                     setParentSearch(e.target.value)
-                    setShowPromoteHint(true)
                   }}
                   placeholder="Search by name or email…"
                   className="pl-9"
@@ -147,7 +142,6 @@ export default function ParentsPage() {
                           key={u.id}
                           onClick={() => {
                             setSelectedParentId(u.id)
-                            setShowPromoteHint(false)
                           }}
                           className="w-full text-left px-3 py-2.5 hover:bg-slate-50 border-b border-slate-50 last:border-0"
                         >
@@ -162,13 +156,6 @@ export default function ParentsPage() {
                       <div className="p-3 text-xs text-slate-400">No matching accounts found.</div>
                     )}
                   </div>
-                )}
-                {showPromoteHint && parentSearch.length >= 2 && (
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    If they don&apos;t exist yet, ask them to sign in once at{' '}
-                    <span className="font-mono">/login</span> first — any account can be promoted
-                    to parent here.
-                  </p>
                 )}
               </div>
             )}
