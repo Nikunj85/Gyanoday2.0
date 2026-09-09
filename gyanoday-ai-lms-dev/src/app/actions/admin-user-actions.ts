@@ -211,6 +211,113 @@ export async function searchStudentCandidates(search: string, limit = 20) {
   return (data || []) as User[]
 }
 
+export async function createParentAndLinkToStudent(
+  parentName: string,
+  parentEmail: string,
+  password: string,
+  studentId: string
+) {
+  await assertAdmin()
+
+  const name = parentName.trim()
+  const email = parentEmail.trim().toLowerCase()
+
+  if (!name || name.length < 2) throw new Error('Parent name is required.')
+  if (!email || !email.includes('@')) throw new Error('A valid parent email is required.')
+  if (!password || password.length < 8) {
+    throw new Error('Parent password must be at least 8 characters.')
+  }
+  if (!studentId) throw new Error('Please select a student.')
+
+  const { data: student, error: studentError } = await supabaseAdmin
+    .from('users')
+    .select('id, role, is_active')
+    .eq('id', studentId)
+    .maybeSingle()
+
+  if (studentError) throw studentError
+  if (!student) throw new Error('Student account not found.')
+  if (student.role !== UserRole.Student) {
+    throw new Error('The selected account is not a student.')
+  }
+
+  // Do not allow an existing student email to become a parent. Parent and
+  // student must remain separate accounts.
+  const { data: existingProfile, error: profileLookupError } = await supabaseAdmin
+    .from('users')
+    .select('id, email, role')
+    .ilike('email', email)
+    .maybeSingle()
+
+  if (profileLookupError) throw profileLookupError
+  if (existingProfile) {
+    throw new Error(
+      existingProfile.role === UserRole.Student
+        ? 'This email already belongs to a student. Use a different email for the parent.'
+        : 'A user with this email already exists.'
+    )
+  }
+
+  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: {
+      name,
+      role: UserRole.Parent,
+    },
+  })
+
+  if (authError) throw authError
+  if (!authData.user) throw new Error('Parent account could not be created.')
+
+  const parentId = authData.user.id
+
+  // Create/update the application profile. Upsert is intentional because a
+  // database trigger may already have created the users row for the Auth user.
+  const { error: userError } = await supabaseAdmin.from('users').upsert(
+    {
+      id: parentId,
+      email,
+      name,
+      role: UserRole.Parent,
+      class_id: null,
+      language: 'en',
+      school_name: '',
+      phone: '',
+      is_active: true,
+    },
+    { onConflict: 'id' }
+  )
+
+  if (userError) {
+    await supabaseAdmin.auth.admin.deleteUser(parentId)
+    throw userError
+  }
+
+  const { error: linkError } = await supabaseAdmin
+    .from('parent_student_links')
+    .insert({
+      parent_id: parentId,
+      student_id: studentId,
+    })
+
+  if (linkError) {
+    await supabaseAdmin.from('users').delete().eq('id', parentId)
+    await supabaseAdmin.auth.admin.deleteUser(parentId)
+    if (linkError.code === '23505') {
+      throw new Error('This parent is already linked to this student.')
+    }
+    throw linkError
+  }
+
+  return {
+    parentId,
+    studentId,
+    email,
+  }
+}
+
 export async function promoteUserToParent(parentId: string, studentId?: string) {
   await assertAdmin()
 
@@ -287,11 +394,28 @@ export async function getAdminParentLinks() {
        parent:users!parent_id(id, name, email),
        student:users!student_id(id, name, email, class:classes(name))`
     )
-    .neq('parent_id', 'student_id')
+    // Do not compare parent_id with the literal string 'student_id'.
+    // The database constraint already prevents self-links.
     .order('created_at', { ascending: false })
 
   if (error) throw error
-  return data || []
+
+  return (data || []).map((link: any) => {
+    const parent = Array.isArray(link.parent) ? link.parent[0] || null : link.parent || null
+    const student = Array.isArray(link.student) ? link.student[0] || null : link.student || null
+    const studentClass = Array.isArray(student?.class)
+      ? student.class[0] || null
+      : student?.class || null
+
+    return {
+      id: link.id,
+      parent_id: link.parent_id,
+      student_id: link.student_id,
+      created_at: link.created_at,
+      parent,
+      student: student ? { ...student, class: studentClass } : null,
+    }
+  })
 }
 
 export async function deleteAdminParentLink(linkId: string) {
