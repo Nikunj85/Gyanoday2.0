@@ -1,6 +1,7 @@
 'use client'
 
 import { DragDropContext, Draggable, Droppable, DropResult } from '@hello-pangea/dnd'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Edit,
   Eye,
@@ -10,7 +11,6 @@ import {
   Languages,
   ListOrdered,
   Loader2,
-  MessageSquareText,
   Sparkles,
   Trash2,
   Video,
@@ -53,55 +53,60 @@ export function ChaptersTable({
   onReorder,
 }: ChaptersTableProps) {
   const { toast } = useToast()
-  const [generatingNotesFor, setGeneratingNotesFor] = useState<string | null>(null)
-  const [generatingSummaryFor, setGeneratingSummaryFor] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+  const [generatingFor, setGeneratingFor] = useState<string | null>(null)
 
-  const handleGenerateSummary = async (chapter: Chapter) => {
+  /** One action instead of two — generates both the AI Summary (student
+   * "Smart Summary" tab) and Smart Notes (student "Active-Recall Smart
+   * Notes") together. Having these as two separate buttons was causing
+   * admins to click the wrong one and think generation had failed. */
+  const handleGenerateContent = async (chapter: Chapter) => {
     if (!chapter.pdf_url) {
       toast({
         variant: 'destructive',
         title: 'No PDF',
-        description: 'This chapter needs a PDF uploaded before generating a summary.',
+        description: 'This chapter needs a PDF uploaded before generating AI content.',
       })
       return
     }
-    setGeneratingSummaryFor(chapter.id)
+    setGeneratingFor(chapter.id)
     try {
-      const result = await generateChapterSummary(chapter.id, chapter.pdf_url, chapter.language)
-      if (!result.success) throw new Error(result.error || 'Failed to generate summary.')
-      toast({ title: 'Summary generated', description: `Generated for "${chapter.title}".` })
-    } catch (err) {
-      toast({
-        variant: 'destructive',
-        title: 'Failed to generate summary',
-        description: err instanceof Error ? err.message : 'Please try again.',
-      })
-    } finally {
-      setGeneratingSummaryFor(null)
-    }
-  }
+      const [summaryResult, notesResult] = await Promise.allSettled([
+        generateChapterSummary(chapter.id, chapter.pdf_url, chapter.language),
+        generateAndSaveSmartNotes(chapter.id),
+      ])
 
-  const handleGenerateSmartNotes = async (chapter: Chapter) => {
-    if (!chapter.pdf_url) {
-      toast({
-        variant: 'destructive',
-        title: 'No PDF',
-        description: 'This chapter needs a PDF uploaded before generating Smart Notes.',
-      })
-      return
-    }
-    setGeneratingNotesFor(chapter.id)
-    try {
-      await generateAndSaveSmartNotes(chapter.id)
-      toast({ title: 'Smart Notes generated', description: `Generated for "${chapter.title}".` })
+      const summaryOk = summaryResult.status === 'fulfilled' && summaryResult.value.success
+      const notesOk = notesResult.status === 'fulfilled'
+
+      if (summaryOk && notesOk) {
+        toast({ title: 'AI content generated', description: `Summary + Smart Notes ready for "${chapter.title}".` })
+      } else if (summaryOk || notesOk) {
+        toast({
+          title: 'Partially generated',
+          description: `${summaryOk ? 'Summary' : 'Smart Notes'} generated, but ${
+            summaryOk ? 'Smart Notes' : 'Summary'
+          } failed for "${chapter.title}". You can retry — it will only redo what's missing.`,
+        })
+      } else {
+        const summaryError =
+          summaryResult.status === 'fulfilled' ? summaryResult.value.error : summaryResult.reason?.message
+        const notesError = notesResult.status === 'rejected' ? notesResult.reason?.message : undefined
+        throw new Error(summaryError || notesError || 'Failed to generate AI content.')
+      }
+
+      // Without this the admin table kept showing the old (empty) state
+      // even though the save succeeded — looked exactly like the
+      // generation had silently failed.
+      queryClient.invalidateQueries({ queryKey: ['chapters'] })
     } catch (err) {
       toast({
         variant: 'destructive',
-        title: 'Failed to generate Smart Notes',
+        title: 'Failed to generate AI content',
         description: err instanceof Error ? err.message : 'Please try again.',
       })
     } finally {
-      setGeneratingNotesFor(null)
+      setGeneratingFor(null)
     }
   }
 
@@ -284,34 +289,44 @@ export function ChaptersTable({
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleGenerateSummary(chapter)}
-                              disabled={generatingSummaryFor === chapter.id}
-                              title={chapter.description ? 'Regenerate AI Summary' : 'Generate AI Summary'}
-                              className="h-9 w-9 text-muted-foreground hover:text-primary hover:bg-secondary/30 rounded-xl transition-all"
+                              onClick={() => handleGenerateContent(chapter)}
+                              disabled={generatingFor === chapter.id}
+                              title={
+                                chapter.description && chapter.smart_notes
+                                  ? 'Regenerate AI content (Summary + Smart Notes)'
+                                  : 'Generate AI content — creates both the Smart Summary and Active-Recall Smart Notes'
+                              }
+                              className={cn(
+                                'relative h-9 w-9 rounded-xl transition-all',
+                                chapter.description || chapter.smart_notes
+                                  ? 'text-primary bg-primary/10 hover:bg-primary/15'
+                                  : 'text-muted-foreground hover:text-primary hover:bg-secondary/30'
+                              )}
                             >
-                              {generatingSummaryFor === chapter.id ? (
+                              {generatingFor === chapter.id ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
                               ) : (
-                                <MessageSquareText
-                                  className={cn('h-4 w-4', chapter.description && 'text-primary')}
-                                />
+                                <Sparkles className="h-4 w-4" />
                               )}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleGenerateSmartNotes(chapter)}
-                              disabled={generatingNotesFor === chapter.id}
-                              title={chapter.smart_notes ? 'Regenerate Smart Notes' : 'Generate Smart Notes'}
-                              className="h-9 w-9 text-muted-foreground hover:text-primary hover:bg-secondary/30 rounded-xl transition-all"
-                            >
-                              {generatingNotesFor === chapter.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Sparkles
-                                  className={cn('h-4 w-4', chapter.smart_notes && 'text-primary')}
+                              {/* Two small status dots instead of two buttons —
+                                  still shows at a glance which of the two
+                                  pieces of content exist for this chapter. */}
+                              <span className="absolute top-0.5 right-0.5 flex gap-0.5">
+                                <span
+                                  className={cn(
+                                    'h-1.5 w-1.5 rounded-full',
+                                    chapter.description ? 'bg-blue-500' : 'bg-transparent'
+                                  )}
+                                  title="Summary"
                                 />
-                              )}
+                                <span
+                                  className={cn(
+                                    'h-1.5 w-1.5 rounded-full',
+                                    chapter.smart_notes ? 'bg-amber-500' : 'bg-transparent'
+                                  )}
+                                  title="Smart Notes"
+                                />
+                              </span>
                             </Button>
                             <Button
                               variant="ghost"
