@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next'
 
 import { MotionContainer, MotionWrapper } from '@/lib/animations/MotionWrapper'
 
+import FeaturesSection from '../components/FeaturesSection'
+
 export default function About() {
   const { t } = useTranslation()
 
@@ -77,6 +79,8 @@ export default function About() {
           </div>
         </div>
       </div>
+
+      <FeaturesSection />
     </main>
   )
 }
