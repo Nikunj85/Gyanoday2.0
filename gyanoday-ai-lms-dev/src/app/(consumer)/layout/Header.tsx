@@ -112,6 +112,10 @@ export function Header() {
     gu: 'GUJ',
   }
 
+  // A registered user has one fixed medium. Keep only that language
+  // available so the UI/content cannot be switched to another medium.
+  const availableLanguages = user?.language ? [user.language] : ['en', 'hi', 'gu']
+
   return (
     <>
       <header
@@ -266,7 +270,7 @@ export function Header() {
                 forceMount
                 className="w-32 mt-2 p-1 rounded-xl shadow-xl border-neutral-100 dark:border-neutral-800 bg-white dark:bg-neutral-900 z-[1100]"
               >
-                {['en', 'hi', 'gu'].map((lang) => (
+                {availableLanguages.map((lang) => (
                   <DropdownMenuItem
                     key={lang}
                     onClick={() => setLanguage(lang)}
@@ -326,7 +330,7 @@ export function Header() {
                     forceMount
                     className="w-32 mt-2 p-1 rounded-xl shadow-xl border-neutral-100 dark:border-neutral-800 bg-white dark:bg-neutral-900 z-[1100]"
                   >
-                    {['en', 'hi', 'gu'].map((lang) => (
+                    {availableLanguages.map((lang) => (
                       <DropdownMenuItem
                         key={lang}
                         onClick={() => setLanguage(lang)}

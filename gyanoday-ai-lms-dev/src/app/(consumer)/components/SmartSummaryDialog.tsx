@@ -5,7 +5,6 @@ import { CheckCircle2, Repeat, Sparkles, Target, TrendingDown, Trophy, X } from 
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import MarkdownRenderer from '@/components/common/MarkdownRenderer'
 import { MotionWrapper } from '@/lib/animations/MotionWrapper'
 
 interface ChapterPerformance {
@@ -31,6 +30,23 @@ interface SmartSummaryDialogProps {
 }
 
 type ViewMode = 'summary' | 'strengths'
+
+function toSummaryBullets(content: string): string[] {
+  const cleaned = content.trim()
+  if (!cleaned) return []
+
+  const lines = cleaned
+    .split(/\r?\n+/)
+    .map((line) => line.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())
+    .filter(Boolean)
+
+  if (lines.length > 1) return lines
+
+  return cleaned
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean)
+}
 
 export function SmartSummaryDialog({
   isOpen,
@@ -148,10 +164,23 @@ export function SmartSummaryDialog({
                   transition={{ duration: 0.18 }}
                   className="max-w-3xl"
                 >
-                  <MarkdownRenderer
-                    content={description || 'No summary available for this chapter yet.'}
-                    className="text-neutral-600 dark:text-neutral-300 text-base md:text-lg leading-relaxed font-medium prose-p:text-neutral-600 dark:prose-p:text-neutral-300 prose-headings:text-neutral-900 dark:prose-headings:text-white"
-                  />
+                  {toSummaryBullets(description).length ? (
+                    <ul className="space-y-4">
+                      {toSummaryBullets(description).map((bullet, index) => (
+                        <li key={`${index}-${bullet.slice(0, 24)}`} className="flex items-start gap-3 text-neutral-600 dark:text-neutral-300 text-base md:text-lg leading-relaxed font-medium">
+                          <span
+                            className="mt-2.5 h-2.5 w-2.5 shrink-0 rounded-full"
+                            style={{ backgroundColor: themeColor }}
+                          />
+                          <span>{bullet}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-neutral-500 dark:text-neutral-400 text-base md:text-lg leading-relaxed font-medium">
+                      No summary available for this chapter yet.
+                    </p>
+                  )}
                 </motion.div>
               ) : (
                 <motion.div

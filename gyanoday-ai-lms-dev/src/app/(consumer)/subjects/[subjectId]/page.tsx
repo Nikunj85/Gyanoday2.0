@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react'
 import { generateAndSaveSmartNotes } from '@/app/actions/smart-notes-actions'
 import { getRecommendedTopics } from '@/app/actions/concept-actions'
 import { SmartNotesRenderer } from '@/components/common/SmartNotesRenderer'
+import { ConfirmDialog } from '@/components/common/confirm-dialog'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/use-toast'
 import { MotionContainer, MotionWrapper } from '@/lib/animations/MotionWrapper'
@@ -36,6 +37,7 @@ export default function SubjectDetailPage() {
   const [contentView, setContentView] = useState<'pdf' | 'smart-notes'>('pdf')
   const [isSummaryOpen, setIsSummaryOpen] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [pendingCompletion, setPendingCompletion] = useState<{ chapterId: string; next: boolean } | null>(null)
 
   const { setActiveChapter: setStoreActiveChapter, setActiveSubjectColor } = useChapterStore()
   const { initQuiz } = useQuizStore()
@@ -116,9 +118,17 @@ export default function SubjectDetailPage() {
     },
   })
 
-  const handleToggleCompletion = (chapterId: string, next: boolean) => {
+  const requestToggleCompletion = (chapterId: string, next: boolean) => {
     if (!user?.id) return
-    toggleCompletionMutation.mutate({ chapterId, next })
+    setPendingCompletion({ chapterId, next })
+  }
+
+  const confirmToggleCompletion = () => {
+    if (!pendingCompletion || !user?.id) return
+
+    toggleCompletionMutation.mutate(pendingCompletion, {
+      onSettled: () => setPendingCompletion(null),
+    })
   }
 
   const activeChapter = chapters.find((c) => c.id === activeChapterId) || null
@@ -210,7 +220,7 @@ export default function SubjectDetailPage() {
           userId={user?.id}
           onCompleteClick={() => {
             if (activeChapter) {
-              handleToggleCompletion(activeChapter.id, !completedChapterIds.includes(activeChapter.id))
+              requestToggleCompletion(activeChapter.id, !completedChapterIds.includes(activeChapter.id))
             }
           }}
           onQuizClick={() => {
@@ -266,7 +276,7 @@ export default function SubjectDetailPage() {
               completedChapterIds={completedChapterIds}
               testCounts={attemptsData || {}}
               onChapterSelect={setActiveChapterId}
-              onToggleCompletion={handleToggleCompletion}
+              onToggleCompletion={requestToggleCompletion}
               themeColor={themeColor}
             />
           </MotionWrapper>
@@ -309,6 +319,24 @@ export default function SubjectDetailPage() {
         themeColor={themeColor}
         chapterPerformance={chapterPerformance}
         weakTopics={chapterWeakTopics}
+      />
+
+      <ConfirmDialog
+        open={!!pendingCompletion}
+        onOpenChange={(open) => {
+          if (!open) setPendingCompletion(null)
+        }}
+        onConfirm={confirmToggleCompletion}
+        title={pendingCompletion?.next ? 'Have you finished this chapter?' : 'Mark this chapter as incomplete?'}
+        description={
+          pendingCompletion?.next
+            ? 'Please confirm that you have finished studying this chapter. Your progress will be marked as completed.'
+            : 'This will remove the completed status from this chapter. You can mark it completed again later.'
+        }
+        confirmText={pendingCompletion?.next ? 'Yes, mark as completed' : 'Yes, mark as incomplete'}
+        cancelText="No"
+        variant="default"
+        isPending={toggleCompletionMutation.isPending}
       />
     </main>
   )
