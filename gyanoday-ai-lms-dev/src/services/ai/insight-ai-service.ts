@@ -1,3 +1,4 @@
+import { languageEnforcement, resolveContentLanguage } from '@/lib/ai/language'
 import { buildPrompt } from '@/lib/ai/promptUtils'
 import { AiInsightSchema } from '@/lib/constants/insight_keys'
 import { PromptKeys } from '@/lib/constants/prompt_keys'
@@ -45,7 +46,7 @@ export const insightAiService = {
     // 2. Fetch Chapter Details (Subject, Title)
     const { data: chapterData, error: chapterError } = await supabase
       .from('chapters')
-      .select('title, subject:subjects(name)')
+      .select('title, language, subject:subjects(name, language)')
       .eq('id', chapterId)
       .single()
 
@@ -110,7 +111,18 @@ export const insightAiService = {
       total_questions: totalQuestions.toString(),
       chapter_avg_score: `${avgScore}%`,
       attempt_count: attemptsCount.toString(),
-      language: userData.language || 'English',
+      // Keep the result summary in the same language as the chapter quiz.
+      // The UI language/profile language must not turn a Hindi/Gujarati
+      // chapter result back into English.
+      // The result summary must use the language of the chapter that was
+      // actually quizzed. Do not let the subject or student's profile
+      // language override a Hindi/Gujarati chapter.
+      language: resolveContentLanguage({
+        chapterLanguage: (chapterData as any).language,
+        subjectLanguage: ((chapterData as any).subject as any)?.language,
+        subjectName: ((chapterData as any).subject as any)?.name,
+        fallbackLanguage: userData.language,
+      }),
       student_name: userData.name || 'Student',
       quiz_data: formattedQuizData,
     }
@@ -131,7 +143,9 @@ export const insightAiService = {
     }
 
     // 6. Build the full prompt with variables
-    const prompt = buildPrompt(promptKey, promptTemplate, variables)
+    const prompt =
+      buildPrompt(promptKey, promptTemplate, variables) +
+      languageEnforcement(variables.language as any, 'json')
 
     // 7. Call OpenAI with the structured schema
     const insight = await openAIService.generateTextResultWithSchema(

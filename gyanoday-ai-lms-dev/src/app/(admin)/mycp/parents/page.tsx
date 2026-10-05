@@ -1,15 +1,16 @@
 'use client'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Search, Trash2, UserPlus, Users, X } from 'lucide-react'
+import { Eye, EyeOff, Loader2, Search, Trash2, UserPlus, Users, X } from 'lucide-react'
 import { useState } from 'react'
 
 import {
   createParentAndLinkToStudent,
-  deleteAdminParentLink,
+  deleteAdminParentAccount,
   getAdminParentLinks,
   searchStudentCandidates,
 } from '@/app/actions/admin-user-actions'
+import { ConfirmDialog } from '@/components/common/confirm-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/use-toast'
@@ -21,8 +22,10 @@ export default function ParentsPage() {
   const [parentName, setParentName] = useState('')
   const [parentEmail, setParentEmail] = useState('')
   const [parentPassword, setParentPassword] = useState('')
+  const [showParentPassword, setShowParentPassword] = useState(false)
   const [studentSearch, setStudentSearch] = useState('')
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
+  const [parentToRemove, setParentToRemove] = useState<{ id: string; name: string } | null>(null)
 
   const { data: links, isLoading: isLoadingLinks } = useQuery({
     queryKey: ['parent-links'],
@@ -66,17 +69,23 @@ export default function ParentsPage() {
   })
 
   const unlinkMutation = useMutation({
-    mutationFn: deleteAdminParentLink,
+    mutationFn: deleteAdminParentAccount,
     onSuccess: () => {
-      toast({ title: 'Parent link removed' })
+      toast({
+        title: 'Parent removed',
+        description: 'The parent account and all of its links were deleted. You can add this email again.',
+      })
       queryClient.invalidateQueries({ queryKey: ['parent-links'] })
+      queryClient.invalidateQueries({ queryKey: ['parent-student-picker'] })
+      setParentToRemove(null)
     },
     onError: (error: any) => {
       toast({
-        title: 'Failed to remove link',
+        title: 'Failed to remove parent',
         description: error?.message || 'Something went wrong.',
         variant: 'destructive',
       })
+      setParentToRemove(null)
     },
   })
 
@@ -84,6 +93,7 @@ export default function ParentsPage() {
     setParentName('')
     setParentEmail('')
     setParentPassword('')
+    setShowParentPassword(false)
     setStudentSearch('')
     setSelectedStudentId(null)
   }
@@ -158,12 +168,23 @@ export default function ParentsPage() {
               <label className="text-xs font-semibold text-slate-500 mb-1.5 block">
                 Parent Password
               </label>
-              <Input
-                value={parentPassword}
-                onChange={(e) => setParentPassword(e.target.value)}
-                type="password"
-                placeholder="Minimum 8 characters"
-              />
+              <div className="relative">
+                <Input
+                  value={parentPassword}
+                  onChange={(e) => setParentPassword(e.target.value)}
+                  type={showParentPassword ? 'text' : 'password'}
+                  placeholder="Minimum 8 characters"
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowParentPassword((value) => !value)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                  aria-label={showParentPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showParentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
               <p className="text-[11px] text-slate-400 mt-1">
                 Give this password to the parent so they can log in.
               </p>
@@ -305,10 +326,15 @@ export default function ParentsPage() {
                     <td className="px-6 py-3 text-right">
                       <button
                         type="button"
-                        onClick={() => unlinkMutation.mutate(link.id)}
+                        onClick={() =>
+                          setParentToRemove({
+                            id: link.parent_id,
+                            name: link.parent?.name || 'this parent',
+                          })
+                        }
                         disabled={unlinkMutation.isPending}
                         className="text-slate-300 hover:text-rose-500 transition-colors"
-                        title="Remove link"
+                        title="Remove parent account"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -320,6 +346,18 @@ export default function ParentsPage() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!parentToRemove}
+        onOpenChange={(open) => {
+          if (!open && !unlinkMutation.isPending) setParentToRemove(null)
+        }}
+        onConfirm={() => parentToRemove && unlinkMutation.mutate(parentToRemove.id)}
+        title="Remove parent?"
+        description={`This permanently deletes ${parentToRemove?.name}'s account, login and all linked-student connections. The same email can be added again afterwards.`}
+        confirmText="Remove Parent"
+        isPending={unlinkMutation.isPending}
+      />
     </div>
   )
 }

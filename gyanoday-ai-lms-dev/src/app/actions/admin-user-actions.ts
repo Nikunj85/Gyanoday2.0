@@ -24,6 +24,30 @@ async function assertAdmin() {
   return user
 }
 
+async function findAuthUserByEmail(email: string) {
+  const normalizedEmail = email.trim().toLowerCase()
+  let page = 1
+
+  while (page <= 10) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+      page,
+      perPage: 1000,
+    })
+
+    if (error) throw error
+
+    const match = data.users.find(
+      (authUser) => (authUser.email || '').trim().toLowerCase() === normalizedEmail
+    )
+
+    if (match) return match
+    if (data.users.length < 1000) break
+    page += 1
+  }
+
+  return null
+}
+
 async function repairInvalidSelfLinks() {
   const { data: links, error } = await supabaseAdmin
     .from('parent_student_links')
@@ -192,6 +216,7 @@ export async function searchParentCandidates(search: string, limit = 20) {
 
 export async function searchStudentCandidates(search: string, limit = 20) {
   await assertAdmin()
+  await repairInvalidSelfLinks()
 
   const term = search.trim()
   if (term.length < 2) return []
@@ -241,81 +266,128 @@ export async function createParentAndLinkToStudent(
     throw new Error('The selected account is not a student.')
   }
 
-  // Do not allow an existing student email to become a parent. Parent and
-  // student must remain separate accounts.
   const { data: existingProfile, error: profileLookupError } = await supabaseAdmin
     .from('users')
-    .select('id, email, role')
+    .select('id, email, role, name, is_active')
     .ilike('email', email)
     .maybeSingle()
 
   if (profileLookupError) throw profileLookupError
+
+  let parentId: string
+  let createdNewAuthUser = false
+
   if (existingProfile) {
-    throw new Error(
-      existingProfile.role === UserRole.Student
-        ? 'This email already belongs to a student. Use a different email for the parent.'
-        : 'A user with this email already exists.'
+    if (existingProfile.role === UserRole.Student) {
+      throw new Error('This email already belongs to a student. Use a different email for the parent.')
+    }
+    if (existingProfile.role === UserRole.Admin) {
+      throw new Error('An admin account cannot be used as a parent.')
+    }
+
+    const { data: existingLinks, error: linksError } = await supabaseAdmin
+      .from('parent_student_links')
+      .select('id')
+      .eq('parent_id', existingProfile.id)
+      .limit(1)
+
+    if (linksError) throw linksError
+    if (existingLinks && existingLinks.length > 0) {
+      throw new Error('A parent with this email is already linked to a student.')
+    }
+
+    parentId = existingProfile.id
+
+    const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUserById(parentId, {
+      password,
+      email: email,
+      email_confirm: true,
+      user_metadata: { name, role: UserRole.Parent },
+    })
+    if (authUpdateError) throw authUpdateError
+
+    const { error: profileUpdateError } = await supabaseAdmin
+      .from('users')
+      .update({ name, email, role: UserRole.Parent, is_active: true })
+      .eq('id', parentId)
+    if (profileUpdateError) throw profileUpdateError
+  } else {
+    // A previous delete may have removed public.users but left the Supabase
+    // Auth identity behind. Detect and reuse that orphan instead of failing
+    // with "User with this email already exists".
+    const orphanAuthUser = await findAuthUserByEmail(email)
+
+    if (orphanAuthUser) {
+      const authRole = orphanAuthUser.user_metadata?.role
+      if (authRole === UserRole.Student) {
+        throw new Error('This email already belongs to a student. Use a different email for the parent.')
+      }
+      if (authRole === UserRole.Admin) {
+        throw new Error('An admin account cannot be used as a parent.')
+      }
+
+      parentId = orphanAuthUser.id
+
+      const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUserById(parentId, {
+        password,
+        email: email,
+        email_confirm: true,
+        user_metadata: { name, role: UserRole.Parent },
+      })
+      if (authUpdateError) throw authUpdateError
+    } else {
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { name, role: UserRole.Parent },
+      })
+
+      if (authError) throw authError
+      if (!authData.user) throw new Error('Parent account could not be created.')
+
+      parentId = authData.user.id
+      createdNewAuthUser = true
+    }
+
+    const { error: userError } = await supabaseAdmin.from('users').upsert(
+      {
+        id: parentId,
+        email,
+        name,
+        role: UserRole.Parent,
+        class_id: null,
+        language: 'en',
+        school_name: '',
+        phone: '',
+        is_active: true,
+      },
+      { onConflict: 'id' }
     )
-  }
 
-  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    user_metadata: {
-      name,
-      role: UserRole.Parent,
-    },
-  })
-
-  if (authError) throw authError
-  if (!authData.user) throw new Error('Parent account could not be created.')
-
-  const parentId = authData.user.id
-
-  // Create/update the application profile. Upsert is intentional because a
-  // database trigger may already have created the users row for the Auth user.
-  const { error: userError } = await supabaseAdmin.from('users').upsert(
-    {
-      id: parentId,
-      email,
-      name,
-      role: UserRole.Parent,
-      class_id: null,
-      language: 'en',
-      school_name: '',
-      phone: '',
-      is_active: true,
-    },
-    { onConflict: 'id' }
-  )
-
-  if (userError) {
-    await supabaseAdmin.auth.admin.deleteUser(parentId)
-    throw userError
+    if (userError) {
+      if (createdNewAuthUser) await supabaseAdmin.auth.admin.deleteUser(parentId)
+      throw userError
+    }
   }
 
   const { error: linkError } = await supabaseAdmin
     .from('parent_student_links')
-    .insert({
-      parent_id: parentId,
-      student_id: studentId,
-    })
+    .insert({ parent_id: parentId, student_id: studentId })
 
   if (linkError) {
-    await supabaseAdmin.from('users').delete().eq('id', parentId)
-    await supabaseAdmin.auth.admin.deleteUser(parentId)
+    // Never leave a half-created new parent behind when the relationship fails.
+    if (createdNewAuthUser) {
+      await supabaseAdmin.from('users').delete().eq('id', parentId)
+      await supabaseAdmin.auth.admin.deleteUser(parentId)
+    }
     if (linkError.code === '23505') {
       throw new Error('This parent is already linked to this student.')
     }
     throw linkError
   }
 
-  return {
-    parentId,
-    studentId,
-    email,
-  }
+  return { parentId, studentId, email }
 }
 
 export async function promoteUserToParent(parentId: string, studentId?: string) {
@@ -424,3 +496,55 @@ export async function deleteAdminParentLink(linkId: string) {
   const { error } = await supabaseAdmin.from('parent_student_links').delete().eq('id', linkId)
   if (error) throw error
 }
+
+/**
+ * Permanently removes a parent account, including all child links and the
+ * Supabase Auth account. This is intentionally different from deleting only
+ * one link: the admin UI's "Remove Parent" action means the parent can be
+ * created again later with the same email.
+ */
+export async function deleteAdminParentAccount(parentId: string) {
+  await assertAdmin()
+
+  if (!parentId) throw new Error('Parent account is required.')
+
+  const { data: parent, error: parentError } = await supabaseAdmin
+    .from('users')
+    .select('id, email, role')
+    .eq('id', parentId)
+    .maybeSingle()
+
+  if (parentError) throw parentError
+
+  if (parent && parent.role !== UserRole.Parent) {
+    throw new Error('Only parent accounts can be removed here.')
+  }
+
+  // Delete links first. This also guarantees the dashboard cannot keep
+  // showing a child after the parent account is removed.
+  const { error: linksError } = await supabaseAdmin
+    .from('parent_student_links')
+    .delete()
+    .eq('parent_id', parentId)
+  if (linksError) throw linksError
+
+  // Remove the application profile before Auth. This works even on databases
+  // where public.users has a non-cascading FK to auth.users.
+  const { error: profileDeleteError } = await supabaseAdmin
+    .from('users')
+    .delete()
+    .eq('id', parentId)
+  if (profileDeleteError) throw profileDeleteError
+
+  const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(parentId)
+  if (authDeleteError) {
+    // If the Auth user is already gone, deletion is already complete. Otherwise
+    // surface the real error so the admin knows cleanup did not finish.
+    if (!/not found|user not found/i.test(authDeleteError.message || '')) {
+      throw authDeleteError
+    }
+  }
+
+  return true
+}
+

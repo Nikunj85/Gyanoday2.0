@@ -6,18 +6,15 @@ import { useTranslation } from 'react-i18next'
 
 import { MotionContainer, MotionWrapper } from '@/lib/animations/MotionWrapper'
 import { cn } from '@/lib/utils'
-import { Chapter } from '@/types'
+import { Chapter, UserChapterProgress } from '@/types'
 
 interface ChapterSidebarProps {
   chapters: Chapter[]
   activeChapterId: string | null
   completedChapterIds: string[]
-  /** chapter_id -> number of quiz attempts, from quizAttemptsService.getChapterQuizAttempts.
-   * "Total Test" was previously always 0 because this was never actually
-   * wired to real attempt data. */
-  testCounts?: Record<string, number>
+  chapterProgress?: UserChapterProgress[]
   onChapterSelect: (chapterId: string) => void
-  onToggleCompletion?: (chapterId: string, nextCompleted: boolean) => void
+  onToggleCompletion?: (chapterId: string) => void
   themeColor: string
 }
 
@@ -25,7 +22,7 @@ export function ChapterSidebar({
   chapters,
   activeChapterId,
   completedChapterIds,
-  testCounts = {},
+  chapterProgress = [],
   onChapterSelect,
   onToggleCompletion,
   themeColor,
@@ -59,7 +56,8 @@ export function ChapterSidebar({
           {chapters.map((chapter, index) => {
             const isActive = activeChapterId === chapter.id
             const isCompleted = completedChapterIds.includes(chapter.id)
-            const testCount = testCounts[chapter.id] ?? 0
+            const progress = chapterProgress.find((p) => p.chapter_id === chapter.id)
+            const testCount = progress?.test_count ?? chapter.test_count ?? 0
             const isHovered = hoveredId === chapter.id
 
             return (
@@ -91,19 +89,18 @@ export function ChapterSidebar({
                     <div className="w-10 flex-shrink-0 flex justify-center">
                       <button
                         type="button"
-                        onClick={(e) => {
-                          // Independent of selecting the chapter — without
-                          // this, clicking the checkbox did nothing but
-                          // select the row underneath it (the checkbox had
-                          // no click handler of its own at all).
-                          e.stopPropagation()
-                          onToggleCompletion?.(chapter.id, !isCompleted)
-                        }}
+                        role="checkbox"
+                        aria-checked={isCompleted}
+                        aria-label={`${isCompleted ? 'Unmark' : 'Mark'} ${chapter.title} as completed`}
                         disabled={!onToggleCompletion}
-                        title={isCompleted ? 'Mark as not completed' : 'Mark as completed'}
+                        onClick={(e) => {
+                          // Ticking must not also open the chapter; it only asks for confirmation.
+                          e.stopPropagation()
+                          onToggleCompletion?.(chapter.id)
+                        }}
                         className={cn(
                           'w-7 h-7 flex items-center justify-center transition-all rounded-md border-2',
-                          onToggleCompletion && 'cursor-pointer hover:scale-110 active:scale-95',
+                          onToggleCompletion && 'cursor-pointer hover:scale-110',
                           isActive
                             ? 'border-white/40 bg-white/10'
                             : isCompleted

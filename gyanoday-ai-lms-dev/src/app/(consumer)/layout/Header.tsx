@@ -1,19 +1,12 @@
 'use client'
 
-import { ChevronDown, Globe, Menu, X } from 'lucide-react'
+import { Menu, X } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { useLanguage } from '@/providers/language-provider'
 import { useQuizStore } from '@/store/use-quiz-store'
 import { useUserStore } from '@/store/user-store'
 
@@ -21,7 +14,6 @@ import { ExitConfirmationDialog } from '../components/ExitConfirmationDialog'
 
 export function Header() {
   const { t, ready } = useTranslation()
-  const { language, setLanguage } = useLanguage()
   const { user, isLoading, logout } = useUserStore()
   const router = useRouter()
   const { questions, isReviewMode, isGenerating, reset: resetQuiz } = useQuizStore()
@@ -106,15 +98,6 @@ export function Header() {
       .toUpperCase()
   }
 
-  const langAbbr: Record<string, string> = {
-    en: 'ENG',
-    hi: 'HIN',
-    gu: 'GUJ',
-  }
-
-  // A registered user has one fixed medium. Keep only that language
-  // available so the UI/content cannot be switched to another medium.
-  const availableLanguages = user?.language ? [user.language] : ['en', 'hi', 'gu']
 
   return (
     <>
@@ -256,32 +239,6 @@ export function Header() {
               )}
             </div>
 
-            {/* Language Selector */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center justify-center space-x-1.5 text-primary-black font-bold px-4 py-2 rounded-full hover:bg-philosophy/10 transition-all border border-neutral-500 text-sm whitespace-nowrap">
-                  <Globe className="w-4 h-4" />
-                  <span>{langAbbr[language]}</span>
-                  <ChevronDown className="w-4 h-4 opacity-50" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                forceMount
-                className="w-32 mt-2 p-1 rounded-xl shadow-xl border-neutral-100 dark:border-neutral-800 bg-white dark:bg-neutral-900 z-[1100]"
-              >
-                {availableLanguages.map((lang) => (
-                  <DropdownMenuItem
-                    key={lang}
-                    onClick={() => setLanguage(lang)}
-                    className={`cursor-pointer rounded-lg text-sm ${language === lang ? 'bg-philosophy/5 text-philosophy font-bold' : 'text-neutral-600 dark:text-neutral-400'}`}
-                  >
-                    {t(`common.languages.${lang}`)}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
             {/* Mobile Menu Toggle */}
             <button
               className="xl:hidden p-2 rounded-full text-primary-black hover:bg-neutral-100 transition-colors"
@@ -316,31 +273,6 @@ export function Header() {
                 />
               </Link>
               <div className="flex items-center space-x-4">
-                {/* Language Selector in Mobile Menu */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="flex items-center justify-center space-x-1.5 text-primary-black dark:text-white font-bold px-4 py-1.5 rounded-full hover:bg-philosophy/10 transition-all border border-neutral-500 text-sm whitespace-nowrap">
-                      <Globe className="w-4 h-4" />
-                      <span>{langAbbr[language]}</span>
-                      <ChevronDown className="w-4 h-4 opacity-50" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="end"
-                    forceMount
-                    className="w-32 mt-2 p-1 rounded-xl shadow-xl border-neutral-100 dark:border-neutral-800 bg-white dark:bg-neutral-900 z-[1100]"
-                  >
-                    {availableLanguages.map((lang) => (
-                      <DropdownMenuItem
-                        key={lang}
-                        onClick={() => setLanguage(lang)}
-                        className={`cursor-pointer rounded-lg text-sm ${language === lang ? 'bg-philosophy/5 text-philosophy font-bold' : 'text-neutral-600 dark:text-neutral-400'}`}
-                      >
-                        {t(`common.languages.${lang}`)}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
 
                 <button
                   className="p-2 rounded-full text-primary-black dark:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"

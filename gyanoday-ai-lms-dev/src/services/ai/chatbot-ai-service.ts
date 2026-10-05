@@ -1,3 +1,4 @@
+import { languageEnforcement, languageLabel } from '@/lib/ai/language'
 import { buildPrompt } from '@/lib/ai/promptUtils'
 import { filterHiddenReasoning, stripHiddenReasoning } from '@/lib/ai/thinkingFilter'
 import { PromptKeys } from '@/lib/constants/prompt_keys'
@@ -38,6 +39,8 @@ export const chatbotAiService = {
     // Ensure conversation_history and student_name have default values to avoid buildPrompt errors
     const processedVariables = {
       ...variables,
+      // Always a readable label ("Hindi"), never a raw code ("hi") in the prompt.
+      language: languageLabel(variables.language),
       conversation_history: variables.conversation_history || 'No previous conversation history.',
       student_name: variables.student_name || 'Student',
     }
@@ -83,6 +86,8 @@ export const chatbotAiService = {
 
     const processedVariables = {
       ...variables,
+      // Always a readable label ("Hindi"), never a raw code ("hi") in the prompt.
+      language: languageLabel(variables.language),
       conversation_history: variables.conversation_history || 'No previous conversation history.',
       student_name: variables.student_name || 'Student',
     }
@@ -114,7 +119,7 @@ export const chatbotAiService = {
       class_name: chapter.class?.name || 'this class',
       language: processedVariables.language,
       student_name: processedVariables.student_name,
-    })
+    }) + languageEnforcement(languageLabel(processedVariables.language), 'text')
 
     // DYNAMIC part — only the actual question and conversation history,
     // which genuinely change every turn.
@@ -208,6 +213,8 @@ export const chatbotAiService = {
     // Ensure conversation_history and student_name have default values to avoid buildPrompt errors
     const processedVariables = {
       ...variables,
+      // Always a readable label ("Hindi"), never a raw code ("hi") in the prompt.
+      language: languageLabel(variables.language),
       conversation_history:
         variables.conversation_history || variables.history || 'No previous conversation history.',
       student_name: variables.student_name || 'Student',

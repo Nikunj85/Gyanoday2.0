@@ -7,8 +7,8 @@ import { useEffect, useState } from 'react'
 
 import { generateAndSaveSmartNotes } from '@/app/actions/smart-notes-actions'
 import { getRecommendedTopics } from '@/app/actions/concept-actions'
+import { toggleChapterCompletion } from '@/app/actions/user-progress-actions'
 import { SmartNotesRenderer } from '@/components/common/SmartNotesRenderer'
-import { ConfirmDialog } from '@/components/common/confirm-dialog'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/use-toast'
 import { MotionContainer, MotionWrapper } from '@/lib/animations/MotionWrapper'
@@ -22,6 +22,7 @@ import { useChapterStore } from '@/store/chapter-store'
 import { useQuizStore } from '@/store/use-quiz-store'
 import { useUserStore } from '@/store/user-store'
 
+import { ChapterCompleteDialog } from '../../components/ChapterCompleteDialog'
 import { ChapterSidebar } from '../../components/ChapterSidebar'
 import { PDFViewer } from '../../components/PDFViewer'
 import { SubjectHeader } from '../../components/SubjectHeader'
@@ -37,7 +38,8 @@ export default function SubjectDetailPage() {
   const [contentView, setContentView] = useState<'pdf' | 'smart-notes'>('pdf')
   const [isSummaryOpen, setIsSummaryOpen] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
-  const [pendingCompletion, setPendingCompletion] = useState<{ chapterId: string; next: boolean } | null>(null)
+  // Chapter the student is about to mark / unmark — drives the Yes/No confirmation.
+  const [pendingToggle, setPendingToggle] = useState<{ id: string; markAsCompleted: boolean } | null>(null)
 
   const { setActiveChapter: setStoreActiveChapter, setActiveSubjectColor } = useChapterStore()
   const { initQuiz } = useQuizStore()
@@ -99,40 +101,41 @@ export default function SubjectDetailPage() {
   const completedChapterIds =
     progressData?.filter((p) => p.is_completed).map((p) => p.chapter_id) || []
 
-  // Marking a chapter complete/incomplete — previously this had no
-  // mutation wired to it anywhere at all, on the sidebar checkbox OR the
-  // header's "Completed" toggle, so both were purely decorative.
-  const toggleCompletionMutation = useMutation({
-    mutationFn: ({ chapterId, next }: { chapterId: string; next: boolean }) =>
-      userProgressService.toggleCompletion(user!.id, chapterId, next),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user-progress', user?.id, subjectId] })
-      queryClient.invalidateQueries({ queryKey: ['student-progress-overview'] })
+  const activeChapter = chapters.find((c) => c.id === activeChapterId) || null
+  const themeColor = subject?.color_code || '#B188C0'
+
+  // Asks for confirmation first; nothing is saved until the student says Yes.
+  const requestToggleCompletion = (chapterId: string) => {
+    if (!user?.id) return
+    setPendingToggle({ id: chapterId, markAsCompleted: !completedChapterIds.includes(chapterId) })
+  }
+
+  const completionMutation = useMutation({
+    mutationFn: async ({ id, markAsCompleted }: { id: string; markAsCompleted: boolean }) => {
+      const result = await toggleChapterCompletion(user!.id, id, markAsCompleted)
+      if (!result.success) throw new Error(result.error || 'Failed to update chapter progress')
+      return { id, markAsCompleted }
+    },
+    onSuccess: async ({ markAsCompleted }) => {
+      await queryClient.invalidateQueries({ queryKey: ['user-progress'] })
+      await queryClient.invalidateQueries({ queryKey: ['student-progress'] })
+      await queryClient.invalidateQueries({ queryKey: ['student-progress-overview'] })
+      toast({
+        title: markAsCompleted ? 'Chapter marked as completed' : 'Chapter marked as not completed',
+      })
+      setPendingToggle(null)
     },
     onError: (err) => {
       toast({
-        title: "Couldn't update completion status",
+        title: "Couldn't update the chapter",
         description: getFriendlyErrorMessage(err),
         variant: 'destructive',
       })
+      setPendingToggle(null)
     },
   })
 
-  const requestToggleCompletion = (chapterId: string, next: boolean) => {
-    if (!user?.id) return
-    setPendingCompletion({ chapterId, next })
-  }
-
-  const confirmToggleCompletion = () => {
-    if (!pendingCompletion || !user?.id) return
-
-    toggleCompletionMutation.mutate(pendingCompletion, {
-      onSettled: () => setPendingCompletion(null),
-    })
-  }
-
-  const activeChapter = chapters.find((c) => c.id === activeChapterId) || null
-  const themeColor = subject?.color_code || '#B188C0'
+  const pendingChapter = pendingToggle ? chapters.find((c) => c.id === pendingToggle.id) : null
 
   // Keep the global chapter store (read by AIChatBot, among others) in
   // sync with whichever chapter is actually open. Without this, the
@@ -214,15 +217,11 @@ export default function SubjectDetailPage() {
           }
           themeColor={themeColor}
           onSummaryClick={() => setIsSummaryOpen(true)} // Opens Smart Summary dialog
+          onCompleteClick={() => activeChapter && requestToggleCompletion(activeChapter.id)}
           chapterPerformance={chapterPerformance}
           weakTopics={chapterWeakTopics}
           activeChapterId={activeChapter?.id}
           userId={user?.id}
-          onCompleteClick={() => {
-            if (activeChapter) {
-              requestToggleCompletion(activeChapter.id, !completedChapterIds.includes(activeChapter.id))
-            }
-          }}
           onQuizClick={() => {
             if (activeChapter) {
               initQuiz({ chapterId: activeChapter.id, isReviewMode: false })
@@ -274,7 +273,7 @@ export default function SubjectDetailPage() {
               chapters={chapters}
               activeChapterId={activeChapterId}
               completedChapterIds={completedChapterIds}
-              testCounts={attemptsData || {}}
+              chapterProgress={[]}
               onChapterSelect={setActiveChapterId}
               onToggleCompletion={requestToggleCompletion}
               themeColor={themeColor}
@@ -311,6 +310,16 @@ export default function SubjectDetailPage() {
         </MotionContainer>
       </div>
 
+      <ChapterCompleteDialog
+        open={!!pendingToggle}
+        chapterTitle={pendingChapter?.title || ''}
+        markAsCompleted={pendingToggle?.markAsCompleted ?? true}
+        isPending={completionMutation.isPending}
+        themeColor={themeColor}
+        onCancel={() => setPendingToggle(null)}
+        onConfirm={() => pendingToggle && completionMutation.mutate(pendingToggle)}
+      />
+
       <SmartSummaryDialog
         isOpen={isSummaryOpen}
         onClose={() => setIsSummaryOpen(false)}
@@ -319,24 +328,6 @@ export default function SubjectDetailPage() {
         themeColor={themeColor}
         chapterPerformance={chapterPerformance}
         weakTopics={chapterWeakTopics}
-      />
-
-      <ConfirmDialog
-        open={!!pendingCompletion}
-        onOpenChange={(open) => {
-          if (!open) setPendingCompletion(null)
-        }}
-        onConfirm={confirmToggleCompletion}
-        title={pendingCompletion?.next ? 'Have you finished this chapter?' : 'Mark this chapter as incomplete?'}
-        description={
-          pendingCompletion?.next
-            ? 'Please confirm that you have finished studying this chapter. Your progress will be marked as completed.'
-            : 'This will remove the completed status from this chapter. You can mark it completed again later.'
-        }
-        confirmText={pendingCompletion?.next ? 'Yes, mark as completed' : 'Yes, mark as incomplete'}
-        cancelText="No"
-        variant="default"
-        isPending={toggleCompletionMutation.isPending}
       />
     </main>
   )

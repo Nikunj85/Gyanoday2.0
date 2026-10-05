@@ -1,7 +1,9 @@
+import { languageEnforcement, resolveContentLanguage } from '@/lib/ai/language'
 import { buildPrompt } from '@/lib/ai/promptUtils'
 import { SmartNotesSchema } from '@/lib/constants/smart_notes_keys'
 import { PromptKeys } from '@/lib/constants/prompt_keys'
 import { openAIService } from '@/lib/openai'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 
 import { chapterServerService } from '../chapter-server-service'
 import { settingsService } from '../settings-server-service'
@@ -32,10 +34,23 @@ export const smartNotesAiService = {
       throw new Error('Smart Notes prompt setting not configured.')
     }
 
-    const prompt = buildPrompt(PromptKeys.PROMPT_SMART_NOTES_GENERATOR, promptSetting.value, {
-      language: chapter.language || 'English',
-      chapter_title: chapter.title,
+    const { data: subject } = await supabaseAdmin
+      .from('subjects')
+      .select('language, name')
+      .eq('id', chapter.subject_id)
+      .maybeSingle()
+
+    const language = resolveContentLanguage({
+      chapterLanguage: chapter.language,
+      subjectLanguage: subject?.language,
+      subjectName: subject?.name,
     })
+
+    const prompt =
+      buildPrompt(PromptKeys.PROMPT_SMART_NOTES_GENERATOR, promptSetting.value, {
+        language,
+        chapter_title: chapter.title,
+      }) + languageEnforcement(language, 'json')
 
     const notes = await openAIService.generateResultWithSchema({
       fileId,

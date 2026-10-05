@@ -1,10 +1,10 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase/admin'
+import { UserRole } from '@/types/users'
 import { userSummaryAiService } from '@/services/ai/user-summary-ai-service'
-import { userServerService } from '@/services/user-server-service'
 
-import { getWeeklyStreak } from './streak-actions'
 
 export interface LinkedStudentSummary {
   id: string
@@ -28,23 +28,45 @@ export async function getLinkedStudents(): Promise<LinkedStudentSummary[]> {
 
   if (!user) throw new Error('Not authenticated')
 
-  const { data, error } = await supabase
+  const { data: profile, error: profileError } = await supabaseAdmin
+    .from('users')
+    .select('id, role')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (profileError) throw profileError
+  if (!profile || profile.role !== UserRole.Parent) throw new Error('Parent access required.')
+
+  // Use the service-role client only after authenticating the current parent.
+  // This avoids relation/RLS shape issues while keeping the query strictly
+  // scoped to auth.uid()'s parent_id.
+  const { data: links, error: linksError } = await supabaseAdmin
     .from('parent_student_links')
-    .select('student:users!student_id(id, name, email, language, class:classes(name))')
+    .select('student_id')
     .eq('parent_id', user.id)
 
-  if (error) throw error
+  if (linksError) throw linksError
+  const studentIds = Array.from(new Set((links || []).map((row: any) => row.student_id).filter(Boolean)))
+  if (studentIds.length === 0) return []
 
-  return (data || [])
-    .map((row: any) => row.student)
-    .filter(Boolean)
-    .map((s: any) => ({
+  const { data: students, error: studentsError } = await supabaseAdmin
+    .from('users')
+    .select('id, name, email, language, class_id, class:classes(name)')
+    .in('id', studentIds)
+    .eq('role', UserRole.Student)
+
+  if (studentsError) throw studentsError
+
+  return (students || []).map((s: any) => {
+    const studentClass = Array.isArray(s.class) ? s.class[0] || null : s.class || null
+    return {
       id: s.id,
       name: s.name,
       email: s.email,
       language: s.language || 'en',
-      class_name: s.class?.name || null,
-    }))
+      class_name: studentClass?.name || null,
+    }
+  })
 }
 
 /** Verifies the current parent session is actually linked to this student
@@ -57,7 +79,16 @@ async function assertParentOfStudent(studentId: string) {
 
   if (!user) throw new Error('Not authenticated')
 
-  const { data, error } = await supabase
+  const { data: profile, error: profileError } = await supabaseAdmin
+    .from('users')
+    .select('id, role')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (profileError) throw profileError
+  if (!profile || profile.role !== UserRole.Parent) throw new Error('Parent access required.')
+
+  const { data: link, error } = await supabaseAdmin
     .from('parent_student_links')
     .select('id')
     .eq('parent_id', user.id)
@@ -65,9 +96,41 @@ async function assertParentOfStudent(studentId: string) {
     .maybeSingle()
 
   if (error) throw error
-  if (!data) throw new Error('You are not linked to this student.')
+  if (!link) throw new Error('You are not linked to this student.')
 
   return { supabase, parentId: user.id }
+}
+
+/** YYYY-MM-DD in a fixed timezone so day boundaries match what families expect (India). */
+const STREAK_TIME_ZONE = 'Asia/Kolkata'
+function dayKey(date: Date | string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: STREAK_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(date))
+}
+
+/**
+ * Consecutive active days ending today (or yesterday, if the child has not
+ * studied yet today). Computed directly from quiz attempts and chapter
+ * completions with the service-role client, so it no longer depends on the
+ * student's RLS-scoped streak action or on the STREAK_EMOJI_CONFIG setting.
+ */
+function computeCurrentStreak(activityDates: Array<Date | string>): number {
+  const active = new Set(activityDates.map(dayKey))
+  if (active.size === 0) return 0
+
+  const cursor = new Date()
+  if (!active.has(dayKey(cursor))) cursor.setDate(cursor.getDate() - 1)
+
+  let streak = 0
+  while (active.has(dayKey(cursor))) {
+    streak++
+    cursor.setDate(cursor.getDate() - 1)
+  }
+  return streak
 }
 
 export interface ChildProgressSummary {
@@ -90,41 +153,59 @@ export interface ChildProgressSummary {
  * user_chapter_progress, and ai_insights.
  */
 export async function getChildProgressSummary(studentId: string): Promise<ChildProgressSummary> {
-  const { supabase } = await assertParentOfStudent(studentId)
+  await assertParentOfStudent(studentId)
 
-  const studentData = await userServerService.getUserById(studentId)
+  const { data: studentData, error: studentError } = await supabaseAdmin
+    .from('users')
+    .select('id, name, class_id')
+    .eq('id', studentId)
+    .maybeSingle()
+  if (studentError) throw studentError
   if (!studentData) throw new Error('Student not found.')
 
-  const [attemptsRes, progressRes, chaptersCountRes, insights, streakResult] = await Promise.all([
-    supabase
+  const [attemptsRes, progressRes, chaptersCountRes, insights] = await Promise.all([
+    supabaseAdmin
       .from('quiz_attempts')
-      .select('score, started_at, submitted_at, created_at')
+      .select('score, total_questions, started_at, submitted_at, created_at')
       .eq('user_id', studentId)
       .order('created_at', { ascending: false })
       .limit(50),
-    supabase
+    supabaseAdmin
       .from('user_chapter_progress')
-      .select('is_completed', { count: 'exact' })
+      .select('is_completed, completed_at', { count: 'exact' })
       .eq('user_id', studentId)
       .eq('is_completed', true),
     studentData.class_id
-      ? supabase
+      ? supabaseAdmin
           .from('chapters')
           .select('id', { count: 'exact', head: true })
           .eq('class_id', studentData.class_id)
           .eq('is_visible', true)
       : Promise.resolve({ count: 0 }),
-    userServerService.getStudentInsights(studentId),
-    getWeeklyStreak(studentId),
+    supabaseAdmin
+      .from('ai_insights')
+      .select('*, chapter:chapters(title)')
+      .eq('user_id', studentId)
+      .order('created_at', { ascending: false }),
   ])
+
+  // Surface real query failures instead of silently rendering zeros.
+  if (attemptsRes.error) throw attemptsRes.error
+  if (progressRes.error) throw progressRes.error
 
   const attempts = attemptsRes.data || []
   const totalAttempts = attempts.length
+  // `score` is the number of correct answers, so convert each attempt to a
+  // percentage of its own total before averaging.
+  const scoredAttempts = attempts.filter((a: any) => Number(a.total_questions) > 0)
   const averageScorePct =
-    totalAttempts > 0
+    scoredAttempts.length > 0
       ? Math.round(
-          (attempts.reduce((sum, a: any) => sum + (Number(a.score) || 0), 0) / totalAttempts) * 100
-        ) / 100
+          scoredAttempts.reduce(
+            (sum, a: any) => sum + (Number(a.score) / Number(a.total_questions)) * 100,
+            0
+          ) / scoredAttempts.length
+        )
       : 0
 
   const sevenDaysAgo = new Date()
@@ -137,25 +218,15 @@ export async function getChildProgressSummary(studentId: string): Promise<ChildP
     }, 0)
 
   const weakAreasSet = new Set<string>()
-  ;(insights || []).forEach((insight: any) => {
+  const insightRows = (insights as any)?.data || []
+  ;(insightRows || []).forEach((insight: any) => {
     ;(insight.weak_areas || []).forEach((area: string) => weakAreasSet.add(area))
   })
 
-  // Derive a Duolingo-style "current streak" count from the same weekly
-  // data the student's own dashboard shows — count consecutive active
-  // days walking backward from today.
-  let currentStreakDays = 0
-  if (streakResult.success && streakResult.data) {
-    const activeStatuses = new Set(['missed', 'not_joined', 'future'])
-    const todayIndex = streakResult.data.findIndex((d) => d.isToday)
-    if (todayIndex !== -1) {
-      for (let i = todayIndex; i >= 0; i--) {
-        const day = streakResult.data[i]
-        if (activeStatuses.has(day.status)) break
-        currentStreakDays++
-      }
-    }
-  }
+  const currentStreakDays = computeCurrentStreak([
+    ...attempts.map((a: any) => a.created_at).filter(Boolean),
+    ...((progressRes.data as any[]) || []).map((p) => p.completed_at).filter(Boolean),
+  ])
 
   return {
     studentId,
@@ -184,7 +255,9 @@ export async function generateChildParentSummary(studentId: string, language: st
 
   const [progress, parentProfile] = await Promise.all([
     getChildProgressSummary(studentId),
-    user ? userServerService.getUserById(user.id) : null,
+    user
+      ? supabaseAdmin.from('users').select('id, name').eq('id', user.id).maybeSingle().then((r) => r.data)
+      : null,
   ])
 
   const performanceData = {

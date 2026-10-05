@@ -1,3 +1,4 @@
+import { languageEnforcement, languageLabel } from '@/lib/ai/language'
 import { buildPrompt } from '@/lib/ai/promptUtils'
 import { PromptKeys } from '@/lib/constants/prompt_keys'
 import { openAIService } from '@/lib/openai'
@@ -5,6 +6,19 @@ import { AIInsight } from '@/types'
 import { ScoreSummary } from '@/types/users'
 
 import { settingsService } from '../settings-server-service'
+
+/**
+ * Used only when PROMPT_PARENT_PROGRESS_SUMMARY has not been inserted into the
+ * `settings` table yet — without this the whole parent summary failed with a
+ * "Prompt setting not found" error. The settings row, when present, wins.
+ */
+const DEFAULT_PARENT_SUMMARY_PROMPT =
+  'Write a professional, warm progress summary in {{language}} addressed to {{parent_name}}, ' +
+  "a parent of {{student_name}}. Base it only on this performance data: {{performance_data}}. " +
+  'Cover study consistency (study minutes and streak), quiz performance, chapters completed and ' +
+  'the concepts that need reinforcement. Use 4-5 short sentences in plain, parent-friendly language, ' +
+  'avoid jargon, and end with one practical suggestion for how the parent can support learning at home. ' +
+  'If there is little or no activity yet, say so kindly and encourage a first step.'
 
 export const userSummaryAiService = {
   /**
@@ -58,11 +72,12 @@ export const userSummaryAiService = {
       // 3. Build prompt and generate summary
       const insightDataString = JSON.stringify(insightData)
 
-      const prompt = buildPrompt(promptType, setting.value, {
-        language,
-        student_name: studentName,
-        insight_data: insightDataString,
-      })
+      const prompt =
+        buildPrompt(promptType, setting.value, {
+          language: languageLabel(language),
+          student_name: studentName,
+          insight_data: insightDataString,
+        }) + languageEnforcement(languageLabel(language), 'text')
 
       const aiResponse = await openAIService.generateResult(prompt)
 
@@ -107,19 +122,24 @@ export const userSummaryAiService = {
   ): Promise<{ summary: string }> {
     try {
       const promptType = PromptKeys.PROMPT_PARENT_PROGRESS_SUMMARY
-      const setting = await settingsService.getSettingBasedOnKey(promptType)
 
-      if (!setting) {
-        console.error(`[UserSummaryAiService] Prompt setting not found: ${promptType}`)
-        throw new Error(`Summary configuration error: Prompt setting not found.`)
+      let template = DEFAULT_PARENT_SUMMARY_PROMPT
+      try {
+        const setting = await settingsService.getSettingBasedOnKey(promptType)
+        if (setting?.value) template = setting.value
+      } catch {
+        console.warn(
+          `[UserSummaryAiService] ${promptType} not found in settings; using built-in default prompt.`
+        )
       }
 
-      const prompt = buildPrompt(promptType, setting.value, {
-        language,
-        student_name: studentName,
-        parent_name: parentName || 'there',
-        performance_data: JSON.stringify(performanceData),
-      })
+      const prompt =
+        buildPrompt(promptType, template, {
+          language: languageLabel(language),
+          student_name: studentName,
+          parent_name: parentName || 'there',
+          performance_data: JSON.stringify(performanceData),
+        }) + languageEnforcement(languageLabel(language), 'text')
 
       const aiResponse = await openAIService.generateResult(prompt)
 

@@ -3,7 +3,6 @@
 import Hero from '@/app/(consumer)/components/hero'
 
 import AboutSection from './components/AboutSection'
-import FeaturesSection from './components/FeaturesSection'
 import VisionMission from './components/VisionMission'
 import WhyGyanoday from './components/WhyGyanoday'
 
@@ -12,7 +11,6 @@ export default function Home() {
     <div className="flex flex-col selection:bg-secondary selection:text-primary">
       <Hero />
       <AboutSection />
-      <FeaturesSection />
       <VisionMission />
       <WhyGyanoday />
     </div>

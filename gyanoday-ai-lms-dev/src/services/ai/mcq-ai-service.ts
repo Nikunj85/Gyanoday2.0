@@ -1,12 +1,53 @@
+import { languageEnforcement, resolveContentLanguage } from '@/lib/ai/language'
 import { buildPrompt } from '@/lib/ai/promptUtils'
 import { McqQuestionSchema, McqSchema } from '@/lib/constants/mcq_keys'
 import { PromptKeys } from '@/lib/constants/prompt_keys'
 import { openAIService } from '@/lib/openai'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { IncrementalJsonArrayExtractor } from '@/lib/utils/incremental-json-array-extractor'
 
 import { chapterServerService } from '../chapter-server-service'
 import { quizServerService } from '../quiz-server-service'
 import { settingsService } from '../settings-server-service'
+
+async function getGenerationLanguage(
+  userId: string | undefined,
+  chapterLanguage?: string | null,
+  subjectLanguage?: string | null,
+  subjectName?: string | null
+) {
+  // Chapter / subject language is authoritative (see lib/ai/language.ts).
+  // The student's medium is only a last-resort fallback.
+  let fallbackLanguage: string | null = null
+  if (!chapterLanguage && !subjectLanguage && userId) {
+    const { data } = await supabaseAdmin
+      .from('users')
+      .select('language')
+      .eq('id', userId)
+      .maybeSingle()
+    fallbackLanguage = data?.language || null
+  }
+
+  return resolveContentLanguage({ chapterLanguage, subjectLanguage, subjectName, fallbackLanguage })
+}
+
+/**
+ * Builds the final MCQ prompt. The admin-editable template from `settings` is
+ * used as the base, but two things are guaranteed in code so they cannot be
+ * lost by editing the template:
+ *   - topic focus (older templates have no {{topic_focus}} placeholder)
+ *   - the output language (Hindi / Gujarati chapters must produce Hindi / Gujarati quizzes)
+ */
+function composeMcqPrompt(template: string, variables: Record<string, string>) {
+  let prompt = buildPrompt(PromptKeys.PROMPT_MCQ_GENERATOR, template, variables)
+
+  if (!template.includes('{{topic_focus}}')) {
+    prompt += `\n\n${variables.topic_focus}`
+  }
+
+  prompt += languageEnforcement(variables.language as any, 'json')
+  return prompt
+}
 
 async function buildStudentProfile(userId: string | undefined, chapterId: string): Promise<string> {
   if (!userId) {
@@ -56,20 +97,28 @@ export const mcqAiService = {
       throw new Error('Chapter or PDF URL not found')
     }
 
-    const [promptSetting, questionCountSetting, studentProfile] = await Promise.all([
+    const { data: subject } = await supabaseAdmin
+      .from('subjects')
+      .select('language, name')
+      .eq('id', chapter.subject_id)
+      .maybeSingle()
+
+    const [promptSetting, questionCountSetting, studentProfile, generationLanguage] = await Promise.all([
       settingsService.getSettingBasedOnKey(PromptKeys.PROMPT_MCQ_GENERATOR),
       settingsService.getSettingBasedOnKey(PromptKeys.TOTAL_QUESTION_PER_TEST),
       buildStudentProfile(userId, chapterId),
+      getGenerationLanguage(userId, chapter.language, subject?.language, subject?.name),
     ])
 
     const variables = {
-      language: chapter.language || 'English',
+      language: generationLanguage,
       student_profile: studentProfile,
       total_questions: questionCountSetting?.value || '10',
       topic_focus: buildTopicFocus(topic),
     }
 
-    const prompt = buildPrompt(PromptKeys.PROMPT_MCQ_GENERATOR, promptSetting.value, variables)
+    const prompt = composeMcqPrompt(promptSetting.value, variables)
+      console.log(`[McqAiService] chapter=${chapterId} chapter.language=${chapter.language} subject.language=${subject?.language} subject.name=${subject?.name} -> generating in ${generationLanguage}`)
 
     return openAIService.generateResultWithSchema({
       fileId,
@@ -110,21 +159,28 @@ export const mcqAiService = {
         return
       }
 
-      const [vectorStoreId, promptSetting, questionCountSetting, studentProfile] = await Promise.all([
+      const { data: subject } = await supabaseAdmin
+        .from('subjects')
+        .select('language, name')
+        .eq('id', chapter.subject_id)
+        .maybeSingle()
+
+      const [vectorStoreId, promptSetting, questionCountSetting, studentProfile, generationLanguage] = await Promise.all([
         chapterServerService.getOrCreateChapterVectorStoreId(chapterId, false, chapter),
         settingsService.getSettingBasedOnKey(PromptKeys.PROMPT_MCQ_GENERATOR),
         settingsService.getSettingBasedOnKey(PromptKeys.TOTAL_QUESTION_PER_TEST),
         buildStudentProfile(userId, chapterId),
+        getGenerationLanguage(userId, chapter.language, subject?.language, subject?.name),
       ])
 
       const variables = {
-        language: chapter.language || 'English',
+        language: generationLanguage,
         student_profile: studentProfile,
         total_questions: questionCountSetting?.value || '10',
         topic_focus: buildTopicFocus(topic),
       }
 
-      const prompt = buildPrompt(PromptKeys.PROMPT_MCQ_GENERATOR, promptSetting.value, variables)
+      const prompt = composeMcqPrompt(promptSetting.value, variables)
 
       const extractor = new IncrementalJsonArrayExtractor('questions')
       let fullBuffer = ''

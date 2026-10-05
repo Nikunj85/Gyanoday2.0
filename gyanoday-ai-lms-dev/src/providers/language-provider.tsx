@@ -26,7 +26,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     if (user?.language) {
       i18n.changeLanguage(user.language)
     }
-  }, [user?.id, user?.language]) // Sync the registered medium when the profile changes
+  }, [user?.id]) // ONLY trigger when the user ID changes (login/logout)
 
   // 2. State Sync: Keep local state in sync with i18n
   useEffect(() => {

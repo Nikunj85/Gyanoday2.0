@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 
 import { mcqAiService } from '@/services/ai/mcq-ai-service'
+import { createClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
 
@@ -25,7 +26,11 @@ export async function POST(req: NextRequest) {
     return new Response('Invalid request body', { status: 400 })
   }
 
-  const { chapterId, userId, topic } = body
+  const { chapterId, topic } = body
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return new Response('Not authenticated', { status: 401 })
+  const userId = user.id
 
   if (!chapterId) {
     return new Response('chapterId is required', { status: 400 })

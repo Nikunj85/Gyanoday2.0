@@ -14,7 +14,7 @@ import {
   Target,
   Users,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import {
   ChildProgressSummary,
@@ -47,11 +47,13 @@ function MetricPill({
 }
 
 function ChildCard({ student }: { student: LinkedStudentSummary }) {
-  const [isExpanded, setIsExpanded] = useState(false)
+  // Open by default and load straight away — parents should see their child's
+  // progress as soon as the page opens, not an empty list of collapsed cards.
+  const [isExpanded, setIsExpanded] = useState(true)
   const [progress, setProgress] = useState<(ChildProgressSummary & { summary: string }) | null>(
     null
   )
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const initials = student.name
@@ -61,22 +63,24 @@ function ChildCard({ student }: { student: LinkedStudentSummary }) {
     .join('')
     .toUpperCase()
 
-  const handleExpand = async () => {
-    const next = !isExpanded
-    setIsExpanded(next)
-    if (next && !progress && !isLoading) {
-      setIsLoading(true)
-      setError(null)
-      try {
-        const data = await generateChildParentSummary(student.id, student.language)
-        setProgress(data)
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load progress.')
-      } finally {
-        setIsLoading(false)
-      }
+  const loadProgress = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const data = await generateChildParentSummary(student.id, student.language)
+      setProgress(data)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load progress.')
+    } finally {
+      setIsLoading(false)
     }
-  }
+  }, [student.id, student.language])
+
+  useEffect(() => {
+    loadProgress()
+  }, [loadProgress])
+
+  const handleExpand = () => setIsExpanded((value) => !value)
 
   const completionPct =
     progress && progress.totalChapters > 0
@@ -117,7 +121,15 @@ function ChildCard({ student }: { student: LinkedStudentSummary }) {
               Compiling this week&apos;s progress…
             </div>
           ) : error ? (
-            <p className="text-sm text-red-500 py-4">{error}</p>
+            <div className="py-4 space-y-2">
+              <p className="text-sm text-red-500">{error}</p>
+              <button
+                onClick={loadProgress}
+                className="text-xs font-bold text-primary hover:underline"
+              >
+                Try again
+              </button>
+            </div>
           ) : progress ? (
             <div className="space-y-5">
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
@@ -207,9 +219,10 @@ function ChildCard({ student }: { student: LinkedStudentSummary }) {
 export default function ParentDashboardPage() {
   const { user } = useUserStore()
 
-  const { data: students, isLoading } = useQuery({
+  const { data: students, isLoading, isError, error } = useQuery({
     queryKey: ['linked-students'],
     queryFn: () => getLinkedStudents(),
+    retry: 1,
   })
 
   return (
@@ -223,14 +236,22 @@ export default function ParentDashboardPage() {
           Welcome{user?.name ? `, ${user.name}` : ''}
         </h1>
         <p className="text-sm text-neutral-500 mt-1">
-          Tap a child to see this week&apos;s study time, concept mastery, and a plain-language
-          summary of how they&apos;re doing.
+          Your child&apos;s study time, concept mastery, and a plain-language summary of how
+          they&apos;re doing this week.
         </p>
       </div>
 
       {isLoading ? (
         <div className="flex justify-center py-16">
           <Loader2 className="animate-spin text-neutral-300" size={28} />
+        </div>
+      ) : isError ? (
+        <div className="text-center py-16 bg-red-50/60 dark:bg-red-950/20 rounded-3xl border border-red-100 dark:border-red-900/40">
+          <Users className="mx-auto mb-3 text-red-300" size={32} />
+          <p className="font-semibold text-red-600 dark:text-red-400">Unable to load linked students</p>
+          <p className="text-sm text-red-400 mt-1 max-w-sm mx-auto">
+            {error instanceof Error ? error.message : 'Please refresh the page and try again.'}
+          </p>
         </div>
       ) : !students || students.length === 0 ? (
         <div className="text-center py-16 bg-neutral-50 dark:bg-neutral-900 rounded-3xl border border-dashed border-neutral-200 dark:border-neutral-800">
