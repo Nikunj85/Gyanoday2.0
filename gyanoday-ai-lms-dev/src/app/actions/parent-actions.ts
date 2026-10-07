@@ -133,6 +133,8 @@ function computeCurrentStreak(activityDates: Array<Date | string>): number {
   return streak
 }
 
+export type ProgressStatus = 'getting_started' | 'excellent' | 'on_track' | 'needs_attention'
+
 export interface ChildProgressSummary {
   studentId: string
   studentName: string
@@ -143,6 +145,7 @@ export interface ChildProgressSummary {
   weeklyStudyMinutes: number
   currentStreakDays: number
   weakAreas: string[]
+  status: ProgressStatus
 }
 
 /**
@@ -219,8 +222,16 @@ export async function getChildProgressSummary(studentId: string): Promise<ChildP
 
   const weakAreasSet = new Set<string>()
   const insightRows = (insights as any)?.data || []
+  const seenWeak = new Set<string>()
   ;(insightRows || []).forEach((insight: any) => {
-    ;(insight.weak_areas || []).forEach((area: string) => weakAreasSet.add(area))
+    ;(insight.weak_areas || []).forEach((area: string) => {
+      const trimmed = (area || '').trim()
+      const key = trimmed.toLowerCase()
+      if (trimmed && !seenWeak.has(key)) {
+        seenWeak.add(key)
+        weakAreasSet.add(trimmed)
+      }
+    })
   })
 
   const currentStreakDays = computeCurrentStreak([
@@ -228,8 +239,24 @@ export async function getChildProgressSummary(studentId: string): Promise<ChildP
     ...((progressRes.data as any[]) || []).map((p) => p.completed_at).filter(Boolean),
   ])
 
+  const totalChaptersCount = chaptersCountRes.count || 0
+  const completedCount = progressRes.count || 0
+  const completionRatio = totalChaptersCount > 0 ? completedCount / totalChaptersCount : 0
+  const consistent = currentStreakDays >= 3 || Math.round(weeklyStudyMinutes) >= 60
+
+  // Deterministic (not AI-decided) so the badge always matches the numbers shown.
+  const status: ProgressStatus =
+    totalAttempts === 0 && completedCount === 0 && weeklyStudyMinutes === 0
+      ? 'getting_started'
+      : averageScorePct >= 75 && (consistent || completionRatio >= 0.5)
+        ? 'excellent'
+        : averageScorePct >= 55
+          ? 'on_track'
+          : 'needs_attention'
+
   return {
     studentId,
+    status,
     studentName: studentData.name || 'Student',
     averageScorePct,
     totalAttempts,
@@ -270,12 +297,12 @@ export async function generateChildParentSummary(studentId: string, language: st
     weak_concepts: progress.weakAreas,
   }
 
-  const { summary } = await userSummaryAiService.generateParentSummary(
+  const summary  = await userSummaryAiService.generateParentSummary(
     performanceData,
     language,
     progress.studentName,
     parentProfile?.name || undefined
   )
 
-  return { ...progress, summary }
+  return { ...progress, summary, generatedAt: new Date().toISOString() }
 }

@@ -8,17 +8,88 @@ import { ScoreSummary } from '@/types/users'
 import { settingsService } from '../settings-server-service'
 
 /**
+ * Structured parent report (rendered as a card, not as a letter).
+ */
+export interface ParentSummaryContent {
+  headline: string
+  highlights: string[]
+  focusAreas: string[]
+  homeTip: string
+}
+
+/**
  * Used only when PROMPT_PARENT_PROGRESS_SUMMARY has not been inserted into the
- * `settings` table yet — without this the whole parent summary failed with a
- * "Prompt setting not found" error. The settings row, when present, wins.
+ * `settings` table. The settings row, when present, wins — but the OUTPUT FORMAT
+ * below is always appended in code so the report can never turn back into a letter.
  */
 const DEFAULT_PARENT_SUMMARY_PROMPT =
-  'Write a professional, warm progress summary in {{language}} addressed to {{parent_name}}, ' +
-  "a parent of {{student_name}}. Base it only on this performance data: {{performance_data}}. " +
-  'Cover study consistency (study minutes and streak), quiz performance, chapters completed and ' +
-  'the concepts that need reinforcement. Use 4-5 short sentences in plain, parent-friendly language, ' +
-  'avoid jargon, and end with one practical suggestion for how the parent can support learning at home. ' +
-  'If there is little or no activity yet, say so kindly and encourage a first step.'
+  'You are preparing a short progress report card for {{parent_name}}, the parent of {{student_name}}. ' +
+  'Write in {{language}}. Base it ONLY on this performance data: {{performance_data}}. ' +
+  'Be factual, warm and specific; never invent numbers, subjects or events that are not in the data.'
+
+const PARENT_SUMMARY_FORMAT = `
+
+OUTPUT FORMAT (STRICT — overrides any earlier instruction about tone, letters or length):
+This is a report card, NOT a letter or email. Do NOT write a subject line, greeting ("Dear ..."), sign-off ("Warm regards"), or placeholders such as [Your Name].
+Return ONLY valid JSON (no markdown fences, no commentary) with exactly these keys:
+{
+  "headline": "ONE sentence, max 18 words, that gives the overall picture of how the child is doing this week",
+  "highlights": ["2-3 short bullets of what is going well, each max 22 words, each using a real number or fact from the data"],
+  "focus_areas": ["1-3 short bullets of what needs attention, each max 22 words; name the weak concepts exactly as given in the data, in their original script"],
+  "home_tip": "ONE practical, specific sentence (max 25 words) about how the parent can help at home"
+}
+If there is little or no activity yet, use an empty "highlights" array, say so kindly in "headline", and make the "home_tip" a gentle first step.`
+
+function asStringArray(value: unknown, max: number): string[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((v) => (typeof v === 'string' ? v : ''))
+    .map((v) => v.replace(/^\s*(?:[-*•●▪◦–—]|\d+[.)])\s+/, '').trim())
+    .filter(Boolean)
+    .slice(0, max)
+}
+
+/** Parses the model output; degrades gracefully to bullets if it was not valid JSON. */
+function parseParentSummary(raw: string): ParentSummaryContent {
+  const text = (raw || '').replace(/```json\n?|```/gi, '').trim()
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
+
+  if (start !== -1 && end > start) {
+    try {
+      const parsed = JSON.parse(text.slice(start, end + 1))
+      const content: ParentSummaryContent = {
+        headline: typeof parsed.headline === 'string' ? parsed.headline.trim() : '',
+        highlights: asStringArray(parsed.highlights, 3),
+        focusAreas: asStringArray(parsed.focus_areas ?? parsed.focusAreas, 3),
+        homeTip: typeof parsed.home_tip === 'string' ? parsed.home_tip.trim() : '',
+      }
+      if (content.headline || content.highlights.length || content.focusAreas.length) return content
+    } catch {
+      // fall through to plain-text fallback
+    }
+  }
+
+  // Fallback: drop letter boilerplate and show the remaining sentences as bullets.
+  const sentences = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(
+      (l) =>
+        l &&
+        !/^(subject|dear|warm regards|best regards|regards|sincerely|\[your name\])/i.test(l)
+    )
+    .join(' ')
+    .match(/[^.!?।]+[.!?।]+/g)
+    ?.map((x) => x.trim()) || []
+
+  return {
+    headline: sentences[0] || '',
+    highlights: sentences.slice(1, 4),
+    focusAreas: [],
+    homeTip: '',
+  }
+}
 
 export const userSummaryAiService = {
   /**
@@ -119,9 +190,10 @@ export const userSummaryAiService = {
     language: string,
     studentName: string,
     parentName?: string
-  ): Promise<{ summary: string }> {
+  ): Promise<ParentSummaryContent> {
     try {
       const promptType = PromptKeys.PROMPT_PARENT_PROGRESS_SUMMARY
+      const label = languageLabel(language)
 
       let template = DEFAULT_PARENT_SUMMARY_PROMPT
       try {
@@ -135,24 +207,16 @@ export const userSummaryAiService = {
 
       const prompt =
         buildPrompt(promptType, template, {
-          language: languageLabel(language),
+          language: label,
           student_name: studentName,
-          parent_name: parentName || 'there',
+          parent_name: parentName || 'the parent',
           performance_data: JSON.stringify(performanceData),
-        }) + languageEnforcement(languageLabel(language), 'text')
+        }) +
+        PARENT_SUMMARY_FORMAT +
+        languageEnforcement(label, 'json-generic')
 
       const aiResponse = await openAIService.generateResult(prompt)
-
-      try {
-        let cleanResponse = aiResponse.replace(/```json\n?|```/g, '').trim()
-        if (cleanResponse.startsWith('"') && cleanResponse.endsWith('"')) {
-          cleanResponse = cleanResponse.substring(1, cleanResponse.length - 1).trim()
-        }
-        const parsedResponse = JSON.parse(cleanResponse)
-        return { summary: parsedResponse.summary || cleanResponse }
-      } catch {
-        return { summary: aiResponse }
-      }
+      return parseParentSummary(aiResponse)
     } catch (error) {
       console.error(`[UserSummaryAiService] Error in generateParentSummary:`, error)
       throw error

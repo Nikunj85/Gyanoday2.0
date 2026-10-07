@@ -74,7 +74,7 @@ const SCRIPT_NAME: Record<ContentLanguage, string> = {
  */
 export function languageEnforcement(
   language: ContentLanguage,
-  kind: 'json' | 'text' = 'text'
+  kind: 'json' | 'json-generic' | 'text' = 'text'
 ): string {
   if (language === 'English') return ''
 
@@ -84,6 +84,13 @@ export function languageEnforcement(
     `Do NOT answer in English and do NOT transliterate into Latin letters, even if these instructions, ` +
     `the student profile or the source material contain English words. ` +
     `Only well-known proper nouns, formulas and numerals may stay as they are.`
+
+  if (kind === 'json-generic') {
+    return (
+      base +
+      ` The output is JSON: keep every JSON key name exactly as specified (in English) and write every string VALUE in ${language}.`
+    )
+  }
 
   if (kind === 'json') {
     return (
@@ -95,4 +102,35 @@ export function languageEnforcement(
     )
   }
   return base
+}
+
+/**
+ * Format rule for the chapter "Smart Summary". Appended in code so the output is always a
+ * clean bullet list, whatever wording the admin-editable prompt in `settings` uses.
+ */
+export function summaryFormatInstruction(language: ContentLanguage): string {
+  return (
+    `\n\nOUTPUT FORMAT (STRICT): Return ONLY a bullet list, with no introduction, no heading and no closing line. ` +
+    `Write 5 to 7 bullets. Each bullet must be on its own line and start with "- ". ` +
+    `Start every bullet with a short key term or idea in **bold**, then a colon and one simple sentence of at most 25 words ` +
+    `that a student can revise quickly (for example: "- **Main idea**: ..."). ` +
+    `Cover, in order: what the chapter is about, the key people / events / concepts, the main message or lesson, and what to remember for exams. ` +
+    `Everything, including the bold key terms, must be written in ${language}.`
+  )
+}
+
+/** Normalises model output into clean "- " markdown bullets. */
+export function normalizeBulletSummary(raw: string): string {
+  const cleaned = (raw || '')
+    .replace(/^```[a-z]*\s*/i, '')
+    .replace(/```\s*$/i, '')
+    .trim()
+
+  return cleaned
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.replace(/^([•●▪◦*–—]|\d+[.)])\s*/, '- ').replace(/^-(?!\s)/, '- '))
+    .map((line) => (line.startsWith('- ') ? line : `- ${line}`))
+    .join('\n')
 }

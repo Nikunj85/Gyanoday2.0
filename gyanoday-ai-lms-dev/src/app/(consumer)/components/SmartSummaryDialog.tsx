@@ -1,11 +1,19 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { CheckCircle2, Repeat, Sparkles, Target, TrendingDown, Trophy, X } from 'lucide-react'
+import {
+  CheckCircle2,
+  ListChecks,
+  Repeat,
+  Sparkles,
+  Target,
+  TrendingDown,
+  Trophy,
+  X,
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import MarkdownRenderer from '@/components/common/MarkdownRenderer'
 import { MotionWrapper } from '@/lib/animations/MotionWrapper'
 
 interface ChapterPerformance {
@@ -148,10 +156,7 @@ export function SmartSummaryDialog({
                   transition={{ duration: 0.18 }}
                   className="max-w-3xl"
                 >
-                  <MarkdownRenderer
-                    content={description || 'No summary available for this chapter yet.'}
-                    className="text-neutral-600 dark:text-neutral-300 text-base md:text-lg leading-relaxed font-medium prose-p:text-neutral-600 dark:prose-p:text-neutral-300 prose-headings:text-neutral-900 dark:prose-headings:text-white"
-                  />
+                  <SummaryBullets text={description} themeColor={themeColor} />
                 </motion.div>
               ) : (
                 <motion.div
@@ -327,6 +332,98 @@ function InsightMetric({
         <p className="text-xs font-bold uppercase tracking-wider text-neutral-400">{label}</p>
       </div>
       <p className="mt-1 text-2xl font-black text-neutral-900 dark:text-white">{value}</p>
+    </div>
+  )
+}
+
+/* ---------- Smart Summary bullets ---------- */
+
+const BULLET_PREFIX = /^\s*(?:[-*•●▪◦–—]|\d+[.)])\s+/
+
+/**
+ * Turns the stored summary into bullet points.
+ *  - New summaries are already "- **Key term**: sentence" lines.
+ *  - Older summaries are one paragraph, so they are split into sentences
+ *    (handles English ".", Hindi "।" and Gujarati ".") and shown as bullets too.
+ */
+function toBullets(text: string): string[] {
+  const clean = (text || '').trim()
+  if (!clean) return []
+
+  const lines = clean.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+  const hasBullets = lines.some((l) => BULLET_PREFIX.test(l))
+
+  if (hasBullets) {
+    return lines.map((l) => l.replace(BULLET_PREFIX, '').trim()).filter(Boolean)
+  }
+
+  const joined = lines.join(' ')
+  const sentences = joined.match(/[^.!?।]+[.!?।]+(?:["”')\]]+)?|[^.!?।]+$/g) || [joined]
+  return sentences.map((x) => x.trim()).filter((x) => x.length > 1)
+}
+
+/** Renders **bold** segments inside a bullet; everything else is plain text (no raw HTML). */
+function renderInline(text: string, themeColor: string) {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+    part.startsWith('**') && part.endsWith('**') && part.length > 4 ? (
+      <strong key={i} className="font-black" style={{ color: themeColor }}>
+        {part.slice(2, -2)}
+      </strong>
+    ) : (
+      <span key={i}>{part}</span>
+    )
+  )
+}
+
+function SummaryBullets({ text, themeColor }: { text: string; themeColor: string }) {
+  const bullets = toBullets(text)
+
+  if (bullets.length === 0) {
+    return (
+      <p className="text-base font-medium text-neutral-500 dark:text-neutral-400">
+        No summary available for this chapter yet.
+      </p>
+    )
+  }
+
+  return (
+    <div>
+      <div className="mb-4 flex items-center gap-2">
+        <span
+          className="flex h-7 w-7 items-center justify-center rounded-lg"
+          style={{ backgroundColor: `${themeColor}1a`, color: themeColor }}
+        >
+          <ListChecks size={16} />
+        </span>
+        <h3 className="text-sm font-extrabold uppercase tracking-[0.14em] text-neutral-400">
+          Key Points
+        </h3>
+        <span
+          className="rounded-full px-2 py-0.5 text-xs font-black"
+          style={{ backgroundColor: `${themeColor}1a`, color: themeColor }}
+        >
+          {bullets.length}
+        </span>
+      </div>
+
+      <ul className="space-y-3">
+        {bullets.map((point, index) => (
+          <li
+            key={index}
+            className="flex items-start gap-3 rounded-2xl border border-neutral-100 bg-neutral-50/70 px-4 py-3.5 dark:border-neutral-800 dark:bg-neutral-800/40"
+          >
+            <span
+              className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-black text-white shadow-sm"
+              style={{ backgroundColor: themeColor }}
+            >
+              {index + 1}
+            </span>
+            <p className="text-[15px] md:text-base font-medium leading-relaxed text-neutral-700 dark:text-neutral-200">
+              {renderInline(point, themeColor)}
+            </p>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import debounce from 'lodash.debounce'
-import { BookOpen, Eye, Filter, Languages, Plus, Search } from 'lucide-react'
+import { BookOpen, Eye, Filter, Languages, Loader2, Plus, Search, Sparkles } from 'lucide-react'
 import { EyeOff } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
@@ -199,6 +199,52 @@ export default function ChaptersPage() {
     }
   }
 
+  const [isBulkGenerating, setIsBulkGenerating] = useState(false)
+
+  // Rebuilds every chapter's Smart Summary (bullet format, in the subject's language).
+  // Run once after updating so old English paragraph summaries get replaced.
+  const handleRegenerateAllSummaries = async () => {
+    if (
+      !window.confirm(
+        'Regenerate the Smart Summary for ALL chapters that have a PDF? This uses AI credits and can take a few minutes.'
+      )
+    )
+      return
+
+    setIsBulkGenerating(true)
+    try {
+      const all = ((await chapterService.getAll()) || []) as Chapter[]
+      const withPdf = all.filter((c) => !!c.pdf_url)
+      let done = 0
+      let failed = 0
+
+      for (const [index, chapter] of withPdf.entries()) {
+        toast({
+          title: `Generating summaries (${index + 1}/${withPdf.length})`,
+          description: chapter.title,
+        })
+        const result = await generateChapterSummary(chapter.id, chapter.pdf_url ?? '', chapter.language)
+        if (result.success) done++
+        else failed++
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['chapters'] })
+      toast({
+        title: 'Summaries updated',
+        description: `${done} regenerated${failed ? `, ${failed} failed (try those individually)` : ''}.`,
+        variant: failed ? 'destructive' : 'default',
+      })
+    } catch (error: any) {
+      toast({
+        title: 'Bulk generation failed',
+        description: error?.message || 'Something went wrong.',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsBulkGenerating(false)
+    }
+  }
+
   const handleCreate = () => {
     setEditingChapter(null)
     setIsSheetOpen(true)
@@ -285,9 +331,23 @@ export default function ChaptersPage() {
                 Manage academic chapters, content, and ordering.
               </p>
             </div>
-            <Button onClick={handleCreate} className="admin-button-primary">
-              <Plus className="mr-2 h-5 w-5" /> Add New Chapter
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                onClick={handleRegenerateAllSummaries}
+                disabled={isBulkGenerating}
+              >
+                {isBulkGenerating ? (
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                ) : (
+                  <Sparkles className="mr-2 h-5 w-5" />
+                )}
+                Regenerate All Summaries
+              </Button>
+              <Button onClick={handleCreate} className="admin-button-primary">
+                <Plus className="mr-2 h-5 w-5" /> Add New Chapter
+              </Button>
+            </div>
           </div>
 
           {/* Filters Bar */}

@@ -1,6 +1,11 @@
 'use server'
 
-import { languageEnforcement, resolveContentLanguage } from '@/lib/ai/language'
+import {
+  languageEnforcement,
+  normalizeBulletSummary,
+  resolveContentLanguage,
+  summaryFormatInstruction,
+} from '@/lib/ai/language'
 import { buildPrompt } from '@/lib/ai/promptUtils'
 import { PromptKeys } from '@/lib/constants/prompt_keys'
 import { openAIService } from '@/lib/openai'
@@ -46,9 +51,12 @@ export async function generateChapterSummary(chapterId: string, pdfUrl: string, 
     const prompt =
       buildPrompt(PromptKeys.PROMPT_CHAPTER_SHORT_SUMMARY, setting.value, {
         language: generationLanguage,
-      }) + languageEnforcement(generationLanguage, 'text')
+      }) +
+      languageEnforcement(generationLanguage, 'text') +
+      summaryFormatInstruction(generationLanguage)
 
-    const summary = await openAIService.generateResultFromFile(pdfUrl, prompt)
+    const rawSummary = await openAIService.generateResultFromFile(pdfUrl, prompt)
+    const summary = normalizeBulletSummary(rawSummary)
 
     // 5️⃣ Update Database
     const supabase = await createClient()
