@@ -25,11 +25,40 @@ interface StudyTimeChartProps {
 type View = 'weekly' | 'monthly'
 
 function formatHours(minutes: number) {
-  if (minutes < 60) return `${minutes}m`
+  const value = Math.round(minutes)
+  if (value < 60) return `${value}m`
+  const h = Math.floor(value / 60)
+  const m = value % 60
+  return m === 0 ? `${h}h` : `${h}h ${m}m`
+}
 
-  const hours = minutes / 60
+/** Axis label: 45 -> "45m", 60 -> "1h", 90 -> "1h 30m". */
+function formatAxisTick(minutes: number) {
+  const value = Math.round(minutes)
+  if (value <= 0) return '0'
+  if (value < 60) return `${value}m`
+  const h = Math.floor(value / 60)
+  const m = value % 60
+  return m === 0 ? `${h}h` : `${h}h ${m}m`
+}
 
-  return `${hours % 1 === 0 ? hours.toFixed(0) : hours.toFixed(1)}h`
+// Clean step sizes, in minutes, for the y-axis.
+const AXIS_STEPS = [1, 2, 5, 10, 15, 20, 30, 60, 120, 180, 240, 360, 480, 720]
+
+/**
+ * Picks a y-axis that fits the data: whole-minute ticks for short sessions, hour ticks for
+ * long ones, never more than ~4 intervals. The old axis rounded minutes to whole hours,
+ * so any day under 30 minutes produced a column of "0h" labels.
+ */
+function buildYAxis(maxMinutes: number) {
+  if (!Number.isFinite(maxMinutes) || maxMinutes <= 0) {
+    return { ticks: [0, 10, 20, 30], top: 30 }
+  }
+  const step = AXIS_STEPS.find((s) => Math.ceil(maxMinutes / s) <= 4) ?? 720
+  const top = Math.max(1, Math.ceil(maxMinutes / step)) * step
+  const ticks: number[] = []
+  for (let v = 0; v <= top; v += step) ticks.push(v)
+  return { ticks, top }
 }
 
 export function StudyTimeChart({
@@ -51,6 +80,12 @@ export function StudyTimeChart({
       )
 
   const title = isWeekly ? 'This Week' : 'This Month'
+
+  const maxMinutes = Math.max(
+    0,
+    ...(isWeekly ? data.map((d: StudyDay) => d.minutes) : monthlyData.map((d: StudyWeek) => d.minutes))
+  )
+  const yAxis = buildYAxis(maxMinutes)
 
   return (
     <div className="bg-white dark:bg-neutral-900 border border-neutral-100 dark:border-neutral-800 rounded-3xl p-5 md:p-6">
@@ -117,7 +152,7 @@ export function StudyTimeChart({
               margin={{
                 top: 8,
                 right: 4,
-                left: -18,
+                left: 0,
                 bottom: 0,
               }}
             >
@@ -138,9 +173,11 @@ export function StudyTimeChart({
                 tickLine={false}
                 axisLine={false}
                 tick={{ fontSize: 10 }}
-                tickFormatter={(value) =>
-                  `${Math.round(Number(value) / 60)}h`
-                }
+                width={52}
+                domain={[0, yAxis.top]}
+                ticks={yAxis.ticks}
+                allowDecimals={false}
+                tickFormatter={(value) => formatAxisTick(Number(value))}
               />
 
               <Tooltip
@@ -171,7 +208,7 @@ export function StudyTimeChart({
               margin={{
                 top: 8,
                 right: 4,
-                left: -18,
+                left: 0,
                 bottom: 0,
               }}
             >
@@ -192,9 +229,11 @@ export function StudyTimeChart({
                 tickLine={false}
                 axisLine={false}
                 tick={{ fontSize: 10 }}
-                tickFormatter={(value) =>
-                  `${Math.round(Number(value) / 60)}h`
-                }
+                width={52}
+                domain={[0, yAxis.top]}
+                ticks={yAxis.ticks}
+                allowDecimals={false}
+                tickFormatter={(value) => formatAxisTick(Number(value))}
               />
 
               <Tooltip
@@ -232,7 +271,7 @@ export function StudyTimeChart({
         </span>
 
         <span>
-          Hours shown on the chart • tap bars for exact time
+          Axis scales to your time • tap bars for exact time
         </span>
       </div>
     </div>

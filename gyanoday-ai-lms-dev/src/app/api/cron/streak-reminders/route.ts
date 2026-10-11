@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { sendStreakReminders } from '@/app/actions/notification-actions'
+import { sendStreakReminders } from '@/services/streak-reminder-service'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60

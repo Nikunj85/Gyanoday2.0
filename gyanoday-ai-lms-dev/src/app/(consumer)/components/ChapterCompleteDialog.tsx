@@ -14,6 +14,11 @@ import {
 interface ChapterCompleteDialogProps {
   open: boolean
   chapterTitle: string
+  /** 'chapter' (default) = one chapter; 'subject' = every chapter of the subject at once */
+  scope?: 'chapter' | 'subject'
+  /** only for scope="subject" */
+  subjectName?: string
+  chapterCount?: number
   /** true  = the student is about to MARK the chapter completed
    *  false = the student is about to UNMARK a completed chapter */
   markAsCompleted: boolean
@@ -28,6 +33,8 @@ type Copy = {
   completeBody: (chapter: string) => string
   undoTitle: string
   undoBody: (chapter: string) => string
+  subjectCompleteBody: (subject: string, count: number) => string
+  subjectUndoBody: (subject: string) => string
   yes: string
   no: string
 }
@@ -40,6 +47,9 @@ const COPY: Record<string, Copy> = {
     completeBody: (c) => `Have you completed "${c}"? It will be counted in your progress.`,
     undoTitle: 'Mark as not completed?',
     undoBody: (c) => `Do you want to mark "${c}" as not completed?`,
+    subjectCompleteBody: (n, c) =>
+      `Mark all ${c} chapters of "${n}" as completed? It will be counted in your progress.`,
+    subjectUndoBody: (n) => `Mark all chapters of "${n}" as not completed?`,
     yes: 'Yes',
     no: 'No',
   },
@@ -48,6 +58,9 @@ const COPY: Record<string, Copy> = {
     completeBody: (c) => `क्या आपने "${c}" पूरा कर लिया है? यह आपकी प्रगति में गिना जाएगा।`,
     undoTitle: 'अधूरा के रूप में चिह्नित करें?',
     undoBody: (c) => `क्या आप "${c}" को अधूरा चिह्नित करना चाहते हैं?`,
+    subjectCompleteBody: (n, c) =>
+      `क्या आप "${n}" के सभी ${c} अध्याय पूरे के रूप में चिह्नित करना चाहते हैं? यह आपकी प्रगति में गिना जाएगा।`,
+    subjectUndoBody: (n) => `क्या आप "${n}" के सभी अध्याय अधूरे चिह्नित करना चाहते हैं?`,
     yes: 'हाँ',
     no: 'नहीं',
   },
@@ -56,6 +69,9 @@ const COPY: Record<string, Copy> = {
     completeBody: (c) => `શું તમે "${c}" પૂર્ણ કરી લીધું છે? તે તમારી પ્રગતિમાં ગણાશે.`,
     undoTitle: 'અપૂર્ણ તરીકે ચિહ્નિત કરવું?',
     undoBody: (c) => `શું તમે "${c}" ને અપૂર્ણ તરીકે ચિહ્નિત કરવા માંગો છો?`,
+    subjectCompleteBody: (n, c) =>
+      `શું તમે "${n}" ના બધા ${c} પાઠ પૂર્ણ તરીકે ચિહ્નિત કરવા માંગો છો? તે તમારી પ્રગતિમાં ગણાશે.`,
+    subjectUndoBody: (n) => `શું તમે "${n}" ના બધા પાઠ અપૂર્ણ તરીકે ચિહ્નિત કરવા માંગો છો?`,
     yes: 'હા',
     no: 'ના',
   },
@@ -64,6 +80,9 @@ const COPY: Record<string, Copy> = {
 export function ChapterCompleteDialog({
   open,
   chapterTitle,
+  scope = 'chapter',
+  subjectName = '',
+  chapterCount = 0,
   markAsCompleted,
   isPending = false,
   themeColor = '#B188C0',
@@ -90,7 +109,13 @@ export function ChapterCompleteDialog({
             {markAsCompleted ? copy.completeTitle : copy.undoTitle}
           </AlertDialogTitle>
           <AlertDialogDescription className="text-sm leading-relaxed text-neutral-500 dark:text-neutral-400">
-            {markAsCompleted ? copy.completeBody(chapterTitle) : copy.undoBody(chapterTitle)}
+            {scope === 'subject'
+              ? markAsCompleted
+                ? copy.subjectCompleteBody(subjectName, chapterCount)
+                : copy.subjectUndoBody(subjectName)
+              : markAsCompleted
+                ? copy.completeBody(chapterTitle)
+                : copy.undoBody(chapterTitle)}
           </AlertDialogDescription>
         </AlertDialogHeader>
 

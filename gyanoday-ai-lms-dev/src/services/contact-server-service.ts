@@ -52,9 +52,12 @@ export const contactServerService = {
   }) {
     let query = supabaseAdmin.from('student_contacts').select('*', { count: 'exact' })
 
-    if (search) {
+    // Strip characters that have meaning inside a PostgREST .or() filter / LIKE pattern,
+    // so a search term can't inject extra filter conditions.
+    const safeSearch = search.replace(/[%_,()\\]/g, '').trim()
+    if (safeSearch) {
       query = query.or(
-        `full_name.ilike.%${search}%,email.ilike.%${search}%,message.ilike.%${search}%`
+        `full_name.ilike.%${safeSearch}%,email.ilike.%${safeSearch}%,message.ilike.%${safeSearch}%`
       )
     }
 

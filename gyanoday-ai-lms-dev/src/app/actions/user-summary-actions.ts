@@ -1,5 +1,6 @@
 'use server'
 
+import { requireSelf } from '@/lib/auth/guards'
 import { createClient } from '@/lib/supabase/server'
 import { userSummaryAiService } from '@/services/ai/user-summary-ai-service'
 import { aiInsightService } from '@/services/ai-insight-service'
@@ -22,6 +23,7 @@ export async function generateStudentOverallSummary(
     if (!userId) {
       throw new Error('User ID is required to generate a summary.')
     }
+    await requireSelf(userId)
 
     // 1. Fetch all AI insights for the user (using server client for consistency)
     const supabase = await createClient()

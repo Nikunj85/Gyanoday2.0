@@ -6,6 +6,7 @@ import {
   resolveContentLanguage,
   summaryFormatInstruction,
 } from '@/lib/ai/language'
+import { isOwnStorageUrl, requireAdmin } from '@/lib/auth/guards'
 import { buildPrompt } from '@/lib/ai/promptUtils'
 import { PromptKeys } from '@/lib/constants/prompt_keys'
 import { openAIService } from '@/lib/openai'
@@ -21,11 +22,14 @@ import { settingsService } from '@/services/settings-server-service'
  */
 export async function generateChapterSummary(chapterId: string, pdfUrl: string, language: string) {
   try {
+    // Admin-only: this spends AI credits and rewrites the chapter description.
+    await requireAdmin()
+
     // Always derive the generation language from the chapter's subject. The
     // value passed by the UI may be stale on older chapter rows.
     const { data: chapter, error: chapterError } = await supabaseAdmin
       .from('chapters')
-      .select('language, subject:subjects(language, name)')
+      .select('language, pdf_url, subject:subjects(language, name)')
       .eq('id', chapterId)
       .maybeSingle()
 
@@ -55,7 +59,14 @@ export async function generateChapterSummary(chapterId: string, pdfUrl: string, 
       languageEnforcement(generationLanguage, 'text') +
       summaryFormatInstruction(generationLanguage)
 
-    const rawSummary = await openAIService.generateResultFromFile(pdfUrl, prompt)
+    // Use the PDF stored on the chapter row, never a URL the browser supplied; and only
+    // ever fetch files from our own storage (prevents server-side request forgery).
+    const sourcePdfUrl = (chapter as any)?.pdf_url || pdfUrl
+    if (!isOwnStorageUrl(sourcePdfUrl)) {
+      throw new Error('This chapter has no valid PDF in storage.')
+    }
+
+    const rawSummary = await openAIService.generateResultFromFile(sourcePdfUrl, prompt)
     const summary = normalizeBulletSummary(rawSummary)
 
     // 5️⃣ Update Database

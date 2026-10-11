@@ -269,7 +269,8 @@ export async function createParentAndLinkToStudent(
   const { data: existingProfile, error: profileLookupError } = await supabaseAdmin
     .from('users')
     .select('id, email, role, name, is_active')
-    .ilike('email', email)
+    // Escape LIKE wildcards: "_" is common in emails and would otherwise match any character.
+    .ilike('email', email.replace(/[\%_]/g, (m) => `\${m}`))
     .maybeSingle()
 
   if (profileLookupError) throw profileLookupError

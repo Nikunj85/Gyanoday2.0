@@ -1,5 +1,6 @@
 'use server'
 
+import { requireAdmin } from '@/lib/auth/guards'
 import { ContactRequestData, contactServerService } from '@/services/contact-server-service'
 
 /**
@@ -10,6 +11,13 @@ export async function submitContactForm(data: ContactRequestData) {
     // Basic validation
     if (!data.fullName || !data.email) {
       return { success: false, error: 'Name and email are required.' }
+    }
+    // Basic abuse protection: sane email shape and length limits.
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(data.email).trim()) || String(data.email).length > 254) {
+      return { success: false, error: 'Please enter a valid email address.' }
+    }
+    if (String(data.fullName).length > 120 || String(data.message ?? '').length > 5000) {
+      return { success: false, error: 'Your message is too long.' }
     }
 
     const result = await contactServerService.saveContactRequest(data)
@@ -31,6 +39,8 @@ export async function getContactRequestsAction(params: {
   search?: string
 }) {
   try {
+    // Contact requests contain visitors' personal data — admins only.
+    await requireAdmin()
     const result = await contactServerService.getContactRequests(params)
     return {
       success: true,

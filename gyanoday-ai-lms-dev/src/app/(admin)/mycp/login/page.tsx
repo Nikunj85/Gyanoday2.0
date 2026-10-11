@@ -44,13 +44,15 @@ export default function LoginPage() {
   }, [user, router])
 
   useEffect(() => {
+    // Remember the EMAIL only. A password must never be kept in localStorage (readable by
+    // any script on the page); browsers' own password managers handle that safely.
+    localStorage.removeItem('admin_password') // clean up values saved by older versions
+
     const savedEmail = localStorage.getItem('admin_email')
-    const savedPassword = localStorage.getItem('admin_password')
     const savedRememberMe = localStorage.getItem('admin_remember_me') === 'true'
 
-    if (savedRememberMe && savedEmail && savedPassword) {
+    if (savedRememberMe && savedEmail) {
       setValue('email', savedEmail)
-      setValue('password', savedPassword)
       setRememberMe(true)
     }
   }, [setValue])
@@ -64,7 +66,6 @@ export default function LoginPage() {
     } else {
       if (rememberMe) {
         localStorage.setItem('admin_email', data.email)
-        localStorage.setItem('admin_password', data.password)
         localStorage.setItem('admin_remember_me', 'true')
       } else {
         localStorage.removeItem('admin_email')

@@ -75,6 +75,7 @@ export async function middleware(request: NextRequest) {
     '/student-dashboard',
     '/subjects',
     '/quiz',
+    '/result',
     '/profile',
     '/parent-dashboard',
   ]
@@ -93,7 +94,7 @@ export async function middleware(request: NextRequest) {
   // or quiz progress, so those pages don't make sense for them.
   const authRoutes = ['/login']
   const isAuthRoute = authRoutes.some((route) => request.nextUrl.pathname.startsWith(route))
-  const studentOnlyRoutes = ['/dashboard', '/student-dashboard', '/subjects', '/quiz']
+  const studentOnlyRoutes = ['/dashboard', '/student-dashboard', '/subjects', '/quiz', '/result']
   const isStudentOnlyRoute = studentOnlyRoutes.some((route) =>
     request.nextUrl.pathname.startsWith(route)
   )

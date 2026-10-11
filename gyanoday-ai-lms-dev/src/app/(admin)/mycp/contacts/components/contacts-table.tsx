@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { ContactRequest } from '@/services/contact-server-service'
+import type { ContactRequest } from '@/services/contact-server-service'
 
 interface ContactsTableProps {
   contacts: ContactRequest[]

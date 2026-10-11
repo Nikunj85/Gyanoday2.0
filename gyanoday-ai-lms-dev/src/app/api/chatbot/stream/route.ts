@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 
+import { requireUser } from '@/lib/auth/guards'
 import { chatbotAiService } from '@/services/ai/chatbot-ai-service'
 import { chapterServerService } from '@/services/chapter-server-service'
 
@@ -18,6 +19,13 @@ interface StreamRequestBody {
  * response (see AIChatBot.tsx for the client-side reader).
  */
 export async function POST(req: NextRequest) {
+  // Chapter content and AI credits are for signed-in students only.
+  try {
+    await requireUser()
+  } catch {
+    return new Response('Not authenticated', { status: 401 })
+  }
+
   let body: StreamRequestBody
   try {
     body = await req.json()
@@ -25,11 +33,16 @@ export async function POST(req: NextRequest) {
     return new Response('Invalid request body', { status: 400 })
   }
 
-  const { chapterId, question, history = '', studentName = '' } = body
+  const { chapterId, question: rawQuestion, history: rawHistory = '', studentName: rawName = '' } = body
 
-  if (!chapterId || !question) {
+  if (!chapterId || !rawQuestion || typeof rawQuestion !== 'string') {
     return new Response('chapterId and question are required', { status: 400 })
   }
+
+  // Cap input sizes so a single request can't run up the AI bill or stuff the prompt.
+  const question = rawQuestion.slice(0, 2000)
+  const history = String(rawHistory ?? '').slice(-8000)
+  const studentName = String(rawName ?? '').slice(0, 80)
 
   const encoder = new TextEncoder()
 

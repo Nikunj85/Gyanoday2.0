@@ -1,5 +1,6 @@
 'use server'
 
+import { requireSelf } from '@/lib/auth/guards'
 import { quizServerService } from '@/services/quiz-server-service'
 import { settingsService } from '@/services/settings-server-service'
 import { userProgressServerService } from '@/services/user-progress-server-service'
@@ -11,6 +12,7 @@ export async function getWeeklyStreak(userId: string) {
     if (!userId) {
       throw new Error('User ID is required to get weekly streak.')
     }
+    await requireSelf(userId)
 
     // 1. Fetch Streak Config
     let config: { rules: StreakRule[] }

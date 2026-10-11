@@ -3,6 +3,7 @@
 import { Bell, BellOff, BellRing, Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
+import { useToast } from '@/components/ui/use-toast'
 import { pushNotificationService } from '@/services/push-notification-service'
 
 /**
@@ -17,6 +18,7 @@ export function StreakReminderOptIn() {
     'checking'
   )
   const [isWorking, setIsWorking] = useState(false)
+  const { toast } = useToast()
 
   useEffect(() => {
     ;(async () => {
@@ -39,6 +41,23 @@ export function StreakReminderOptIn() {
     try {
       const ok = await pushNotificationService.enable()
       setStatus(ok ? 'on' : 'off')
+      if (ok) {
+        toast({ title: 'Daily reminders are on', description: "We'll nudge you if you haven't studied yet today." })
+      } else if (Notification.permission === 'denied') {
+        setStatus('denied')
+        toast({
+          title: 'Notifications are blocked',
+          description: 'Allow notifications for this site in your browser settings, then try again.',
+          variant: 'destructive',
+        })
+      }
+    } catch (error) {
+      setStatus('off')
+      toast({
+        title: "Couldn't turn on reminders",
+        description: error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+        variant: 'destructive',
+      })
     } finally {
       setIsWorking(false)
     }
@@ -49,6 +68,8 @@ export function StreakReminderOptIn() {
     try {
       await pushNotificationService.disable()
       setStatus('off')
+    } catch {
+      toast({ title: "Couldn't turn off reminders", description: 'Please try again.', variant: 'destructive' })
     } finally {
       setIsWorking(false)
     }

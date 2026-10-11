@@ -54,32 +54,6 @@ function ResultContent() {
     enabled: !!chapterId,
   })
 
-  if (!lastAttemptStats) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4 text-center">
-        <MotionWrapper animation="fadeInUp">
-          <div className="max-w-md w-full bg-white dark:bg-neutral-900 p-8 rounded-[32px] shadow-xl border border-gray-100 dark:border-neutral-800">
-            <div className="w-20 h-20 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
-              <span className="text-4xl">📊</span>
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-              {t('common.quiz_result.no_result_title')}
-            </h2>
-            <p className="text-lg text-neutral-600 dark:text-neutral-400 mb-8 leading-relaxed">
-              {t('common.quiz_result.no_result_desc')}
-            </p>
-            <button
-              onClick={() => router.replace(`/dashboard`)}
-              className="w-full py-4 bg-primary text-white rounded-2xl font-bold text-lg hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-primary/20"
-            >
-              {t('common.quiz_result.go_back_to_subjects')}
-            </button>
-          </div>
-        </MotionWrapper>
-      </div>
-    )
-  }
-
   // State Protection
   React.useEffect(() => {
     if (!chapterId || !lastAttemptStats) {
@@ -334,6 +308,34 @@ function ResultContent() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background transition-colors duration-300">
         <Loader2 className="w-12 h-12 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  // Render guard lives AFTER every hook above. Returning earlier changed the number of
+  // hooks between renders ("Rendered fewer/more hooks than expected" crash).
+  if (!lastAttemptStats) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4 text-center">
+        <MotionWrapper animation="fadeInUp">
+          <div className="max-w-md w-full bg-white dark:bg-neutral-900 p-8 rounded-[32px] shadow-xl border border-gray-100 dark:border-neutral-800">
+            <div className="w-20 h-20 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+              <span className="text-4xl">📊</span>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+              {t('common.quiz_result.no_result_title')}
+            </h2>
+            <p className="text-lg text-neutral-600 dark:text-neutral-400 mb-8 leading-relaxed">
+              {t('common.quiz_result.no_result_desc')}
+            </p>
+            <button
+              onClick={() => router.replace(`/dashboard`)}
+              className="w-full py-4 bg-primary text-white rounded-2xl font-bold text-lg hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-primary/20"
+            >
+              {t('common.quiz_result.go_back_to_subjects')}
+            </button>
+          </div>
+        </MotionWrapper>
       </div>
     )
   }

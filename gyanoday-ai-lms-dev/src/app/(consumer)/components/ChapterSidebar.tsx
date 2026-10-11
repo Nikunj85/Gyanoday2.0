@@ -13,6 +13,8 @@ interface ChapterSidebarProps {
   activeChapterId: string | null
   completedChapterIds: string[]
   chapterProgress?: UserChapterProgress[]
+  /** chapterId -> number of quiz attempts (tests) the student has taken */
+  attemptCounts?: Record<string, number>
   onChapterSelect: (chapterId: string) => void
   onToggleCompletion?: (chapterId: string) => void
   themeColor: string
@@ -23,6 +25,7 @@ export function ChapterSidebar({
   activeChapterId,
   completedChapterIds,
   chapterProgress = [],
+  attemptCounts = {},
   onChapterSelect,
   onToggleCompletion,
   themeColor,
@@ -57,7 +60,7 @@ export function ChapterSidebar({
             const isActive = activeChapterId === chapter.id
             const isCompleted = completedChapterIds.includes(chapter.id)
             const progress = chapterProgress.find((p) => p.chapter_id === chapter.id)
-            const testCount = progress?.test_count ?? chapter.test_count ?? 0
+            const testCount = attemptCounts[chapter.id] ?? progress?.test_count ?? chapter.test_count ?? 0
             const isHovered = hoveredId === chapter.id
 
             return (
@@ -134,12 +137,15 @@ export function ChapterSidebar({
                         {chapter.title}
                       </h3>
 
-                      {/* Active State: Total Test Info */}
-                      {isActive && (
-                        <p className="text-white/90 text-sm font-semibold mt-0.5">
-                          {t('common.total_test')}: {String(testCount).padStart(2, '0')}
-                        </p>
-                      )}
+                      {/* Total tests taken — shown for every chapter */}
+                      <p
+                        className={cn(
+                          'text-sm font-semibold mt-0.5',
+                          isActive ? 'text-white/90' : 'text-neutral-400 dark:text-neutral-500'
+                        )}
+                      >
+                        {t('common.total_test')}: {String(testCount).padStart(2, '0')}
+                      </p>
                     </div>
                   </div>
                 </div>

@@ -1,5 +1,6 @@
 'use server'
 
+import { requireUser } from '@/lib/auth/guards'
 import { chatbotAiService } from '@/services/ai/chatbot-ai-service'
 import { chapterServerService } from '@/services/chapter-server-service'
 
@@ -51,6 +52,7 @@ export async function getChatbotResponse(
   studentName: string = ''
 ) {
   try {
+    await requireUser()
     if (!chapterId) {
       throw new Error('Chapter ID is required to process the request.')
     }

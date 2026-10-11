@@ -1,5 +1,6 @@
 'use server'
 
+import { requireSelf } from '@/lib/auth/guards'
 import { insightAiService } from '@/services/ai/insight-ai-service'
 import { insightServerService } from '@/services/insight-server-service'
 

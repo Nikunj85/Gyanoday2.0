@@ -206,6 +206,7 @@ export function SubjectHeader({
               </button>
               {activeChapterId && (
                 <TopicQuizLauncher
+                  chapterTitle={activeChapterTitle}
                   chapterId={activeChapterId}
                   userId={userId}
                   variant="header-outline"
@@ -279,6 +280,7 @@ export function SubjectHeader({
               </button>
               {activeChapterId && (
                 <TopicQuizLauncher
+                  chapterTitle={activeChapterTitle}
                   chapterId={activeChapterId}
                   userId={userId}
                   variant="header-outline"

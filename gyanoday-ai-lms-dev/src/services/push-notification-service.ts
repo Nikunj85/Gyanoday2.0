@@ -28,14 +28,23 @@ export const pushNotificationService = {
   async enable(): Promise<boolean> {
     if (!this.isSupported()) return false
 
-    const permission = await Notification.requestPermission()
-    if (permission !== 'granted') return false
-
     const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
     if (!publicKey) {
-      console.warn('[pushNotificationService] NEXT_PUBLIC_VAPID_PUBLIC_KEY is not set.')
-      return false
+      throw new Error(
+        'Reminders are not configured yet (NEXT_PUBLIC_VAPID_PUBLIC_KEY is missing). Please contact support.'
+      )
     }
+
+    // Fail with a clear message instead of a raw "bad HTTP response code (404)" browser error.
+    const swCheck = await fetch('/sw.js', { method: 'HEAD', cache: 'no-store' }).catch(() => null)
+    if (!swCheck || !swCheck.ok) {
+      throw new Error(
+        'The reminder service file (public/sw.js) is missing on the server. Please contact support.'
+      )
+    }
+
+    const permission = await Notification.requestPermission()
+    if (permission !== 'granted') return false
 
     const registration = await navigator.serviceWorker.register('/sw.js')
     await navigator.serviceWorker.ready
