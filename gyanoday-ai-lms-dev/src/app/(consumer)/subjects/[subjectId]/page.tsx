@@ -304,7 +304,7 @@ export default function SubjectDetailPage() {
                 }`}
               >
                 <FileText size={16} />
-                Chapter PDF
+                {t('common.subject_header.chapter_pdf', 'Chapter PDF')}
               </button>
               <button
                 onClick={handleSmartNotesClick}
@@ -315,7 +315,7 @@ export default function SubjectDetailPage() {
                 }`}
               >
                 <Sparkles size={16} className="text-amber-300 fill-amber-300" />
-                Active-Recall Smart Notes
+                {t('common.subject_header.smart_notes', 'Active-Recall Smart Notes')}
               </button>
             </div>
           </MotionWrapper>
@@ -345,11 +345,13 @@ export default function SubjectDetailPage() {
                     <Sparkles className="w-5 h-5 text-amber-400 absolute -top-1 -right-1 animate-pulse" />
                   </div>
                   <h3 className="text-lg font-bold text-neutral-800 dark:text-neutral-100">
-                    Generating Active-Recall Notes...
+                    {t('common.subject_header.generating_notes', 'Generating Active-Recall Notes...')}
                   </h3>
                   <p className="text-xs text-neutral-500 mt-1 max-w-xs">
-                    AI is parsing the chapter PDF to craft targeted revision questions and
-                    summaries.
+                    {t(
+                      'common.subject_header.generating_notes_desc',
+                      'AI is parsing the chapter PDF to craft targeted revision questions and summaries.'
+                    )}
                   </p>
                 </div>
               ) : (

@@ -14,7 +14,8 @@ import timer from '../../../../public/timer.png'
 export function StreakCard({ item }: { item: StreakDayData }) {
   const [isFlipped, setIsFlipped] = useState(false)
   const isNotJoined = item.status === 'not_joined'
-  const canFlip = !item.isFuture && !isNotJoined
+  // Not-joined days are flagged isFuture by the server only for styling, so they can still flip.
+  const canFlip = !item.isFuture || isNotJoined
   const { language } = useLanguage()
   const { t } = useTranslation()
   const userLang = language || 'en'
@@ -87,7 +88,7 @@ export function StreakCard({ item }: { item: StreakDayData }) {
             </div>
           ) : isNotJoined ? (
             <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center shrink-0">
-              <span className="text-lg sm:text-xl md:text-2xl opacity-40">🚫</span>
+              <span className="text-lg sm:text-xl md:text-2xl opacity-70">🚫</span>
             </div>
           ) : item.isFuture ? (
             <div className="relative w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 shrink-0">
@@ -102,7 +103,7 @@ export function StreakCard({ item }: { item: StreakDayData }) {
             className={cn(
               'text-3xl sm:text-4xl lg:text-3xl xl:text-[34px] font-black leading-none',
               item.isToday && 'text-white',
-              isNotJoined && 'text-neutral-300 dark:text-neutral-600',
+              isNotJoined && 'text-neutral-400 dark:text-neutral-500',
               item.isFuture && !isNotJoined && 'text-neutral-400 dark:text-neutral-500'
             )}
             style={{
@@ -117,7 +118,7 @@ export function StreakCard({ item }: { item: StreakDayData }) {
             className={cn(
               'text-[11px] sm:text-xs lg:text-[11px] xl:text-[12px] font-bold uppercase tracking-widest',
               item.isToday && 'text-white/80',
-              isNotJoined && 'text-neutral-300 dark:text-neutral-600',
+              isNotJoined && 'text-neutral-400 dark:text-neutral-500',
               item.isFuture && !isNotJoined && 'text-neutral-400 dark:text-neutral-500',
               !item.isToday &&
                 !item.isFuture &&
@@ -130,7 +131,7 @@ export function StreakCard({ item }: { item: StreakDayData }) {
 
           {/* "Not Joined Yet" small label for not_joined cards */}
           {isNotJoined && (
-            <span className="text-[9px] sm:text-[10px] lg:text-[11px] xl:text-[13px] font-semibold text-neutral-400 dark:text-neutral-500 leading-tight text-center px-1">
+            <span className="text-[9px] sm:text-[10px] lg:text-[11px] xl:text-[13px] font-semibold text-neutral-500 dark:text-neutral-400 leading-tight text-center px-1">
               {typeof item.label === 'string'
                 ? item.label
                 : item.label?.[userLang] || item.label?.['en'] || 'Not Joined Yet'}
@@ -139,7 +140,28 @@ export function StreakCard({ item }: { item: StreakDayData }) {
         </div>
 
         {/* ─── Back Face ─── */}
-        {canFlip && (
+        {canFlip && isNotJoined && (
+          <div
+            className="absolute inset-0 w-full rounded-2xl overflow-hidden bg-white dark:bg-neutral-800 flex flex-col items-center justify-center gap-1 px-2 text-center border border-dashed border-neutral-300 dark:border-neutral-600"
+            style={{
+              backfaceVisibility: 'hidden',
+              transform: 'rotateY(180deg)',
+              boxShadow: '0 10px 10px -4px rgba(0,0,0,0.12), 0 4px 8px -2px rgba(0,0,0,0.06)',
+            }}
+          >
+            <span className="text-2xl">🚫</span>
+            <p className="text-[12px] lg:text-[11px] 2xl:text-[13px] font-extrabold text-neutral-600 dark:text-neutral-300 leading-tight">
+              {typeof item.label === 'string'
+                ? item.label
+                : item.label?.[userLang] || item.label?.['en'] || 'Not Joined Yet'}
+            </p>
+            <p className="text-[11px] font-semibold text-neutral-400">
+              {item.date} {t(`common.days_short.${String(item.day).toLowerCase()}`, String(item.day))}
+            </p>
+          </div>
+        )}
+
+        {canFlip && !isNotJoined && (
           <div
             className="absolute inset-0 w-full rounded-2xl overflow-hidden bg-white dark:bg-neutral-800"
             style={{

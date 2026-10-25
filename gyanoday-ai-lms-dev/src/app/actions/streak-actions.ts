@@ -4,7 +4,6 @@ import { requireSelf } from '@/lib/auth/guards'
 import { quizServerService } from '@/services/quiz-server-service'
 import { settingsService } from '@/services/settings-server-service'
 import { userProgressServerService } from '@/services/user-progress-server-service'
-import { userServerService } from '@/services/user-server-service'
 import { StreakDayData, StreakRule } from '@/types'
 
 export async function getWeeklyStreak(userId: string) {
@@ -51,16 +50,10 @@ export async function getWeeklyStreak(userId: string) {
     const todayString = getLocalYYYYMMDD(now)
 
     // 3. Fetch Activity via Services
-    const [quizAttempts, chapterCompletions, userData] = await Promise.all([
+    const [quizAttempts, chapterCompletions] = await Promise.all([
       quizServerService.getWeeklyQuizAttempts(userId, mondayString, nextMondayString),
       userProgressServerService.getWeeklyChapterCompletions(userId, mondayString, nextMondayString),
-      userServerService.getUserById(userId),
     ])
-
-    // Get user registration date (YYYY-MM-DD) for "not joined yet" logic
-    const userRegistrationDate = userData?.created_at
-      ? getLocalYYYYMMDD(new Date(userData.created_at))
-      : null
 
     // 4. Process Days
     const days: StreakDayData[] = []
@@ -75,7 +68,6 @@ export async function getWeeklyStreak(userId: string) {
       // Purely day-wise comparisons (YYYY-MM-DD strings natively sort chronologically)
       const isToday = dateString === todayString
       const isFuture = dateString > todayString
-      const isBeforeRegistration = userRegistrationDate ? dateString < userRegistrationDate : false
 
       // Count activities for this specific date
       const dayQuizzes = quizAttempts.filter((a) => {
@@ -117,23 +109,8 @@ export async function getWeeklyStreak(userId: string) {
         matchedRule = rules.find((r) => r.key === 'missed')
       }
 
-      // If the day is before the user registered, show "Not Joined Yet" instead of "Missed"
-      if (isBeforeRegistration) {
-        days.push({
-          day: dayNames[i],
-          date: currentLoopDate.getDate(),
-          fullDate: dateString,
-          quizzes: 0,
-          chapters: 0,
-          isToday: false,
-          isFuture: true, // Treat visually like a future day (greyed out, no flip)
-          status: 'not_joined',
-          gif: '',
-          color: '#a1a1aa',
-          label: { en: 'Not Joined Yet', hi: 'अभी जुड़े नहीं थे', gu: 'હજુ જોડાયા ન હતા' },
-        })
-        continue
-      }
+      // Days before registration are treated like any other past day with no activity:
+      // they fall through to the "missed" rule below, so they render and flip like missed cards.
 
       days.push({
         day: dayNames[i],

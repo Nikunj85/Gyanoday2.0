@@ -248,6 +248,10 @@ export const HI_FILL: Tree = {
       },
     },
     subject_header: {
+      chapter_pdf: 'अध्याय PDF',
+      smart_notes: 'एक्टिव-रिकॉल स्मार्ट नोट्स',
+      generating_notes: 'एक्टिव-रिकॉल नोट्स बनाए जा रहे हैं…',
+      generating_notes_desc: 'AI अध्याय की PDF पढ़कर आपके लिए दोहराव के सवाल और सारांश तैयार कर रहा है।',
       complete: 'पूरा करें',
       completed: 'पूरा हुआ',
       smart_summary: 'स्मार्ट सारांश',
@@ -627,6 +631,10 @@ export const GU_FILL: Tree = {
       waiting_for_insight: 'તમારી ઇનસાઇટની રાહ જોવાઈ રહી છે…',
     },
     subject_header: {
+      chapter_pdf: 'પાઠ PDF',
+      smart_notes: 'એક્ટિવ-રિકોલ સ્માર્ટ નોટ્સ',
+      generating_notes: 'એક્ટિવ-રિકોલ નોટ્સ બની રહી છે…',
+      generating_notes_desc: 'AI પાઠની PDF વાંચીને તમારા માટે પુનરાવર્તનના પ્રશ્નો અને સારાંશ તૈયાર કરી રહ્યું છે.',
       complete: 'પૂર્ણ કરો',
       completed: 'પૂર્ણ થયું',
       smart_summary: 'સ્માર્ટ સારાંશ',

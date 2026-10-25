@@ -226,7 +226,7 @@ export function TopicQuizLauncher({
             className
           )}
         >
-          <span>Practice a Topic</span>
+          <span>{copy.tabTopic}</span>
         </button>
       </SheetTrigger>
 
