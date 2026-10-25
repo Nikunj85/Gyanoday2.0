@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next'
 import { SubjectProgressOverview } from '@/app/actions/student-progress-actions'
 import { toast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
+import { localizeSubjectName } from '@/lib/subject-names'
 import { getFriendlyErrorMessage } from '@/lib/utils/error-messages'
 import { chapterProgressService } from '@/services/chapter-progress-service'
 import { notesService } from '@/services/notes-service'
@@ -20,7 +21,7 @@ interface SubjectChapterListProps {
 }
 
 export function SubjectChapterList({ subjects, userId }: SubjectChapterListProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const [expandedSubjectId, setExpandedSubjectId] = useState<string | null>(subjects[0]?.id ?? null)
   const [noteModalChapter, setNoteModalChapter] = useState<{ id: string; title: string } | null>(null)
@@ -36,7 +37,7 @@ export function SubjectChapterList({ subjects, userId }: SubjectChapterListProps
     onSuccess: invalidateOverview,
     onError: (err) => {
       toast({
-        title: "Couldn't update revision flag",
+        title: t('common.student_dashboard.chapter_list.revision_failed', "Couldn't update revision flag"),
         description: getFriendlyErrorMessage(err),
         variant: 'destructive',
       })
@@ -51,10 +52,10 @@ export function SubjectChapterList({ subjects, userId }: SubjectChapterListProps
     onSuccess: () => {
       invalidateOverview()
       setNoteModalChapter(null)
-      toast({ title: 'Note saved' })
+      toast({ title: t('common.student_dashboard.chapter_list.note_saved', 'Note saved') })
     },
     onError: (err) => {
-      toast({ title: "Couldn't save note", description: getFriendlyErrorMessage(err), variant: 'destructive' })
+      toast({ title: t('common.student_dashboard.chapter_list.note_save_failed', "Couldn't save note"), description: getFriendlyErrorMessage(err), variant: 'destructive' })
     },
   })
 
@@ -65,7 +66,7 @@ export function SubjectChapterList({ subjects, userId }: SubjectChapterListProps
       const existing = await notesService.getNoteForChapter(userId, chapterId)
       setNoteContent(existing?.content || '')
     } catch (err) {
-      toast({ title: "Couldn't load note", description: getFriendlyErrorMessage(err), variant: 'destructive' })
+      toast({ title: t('common.student_dashboard.chapter_list.note_load_failed', "Couldn't load note"), description: getFriendlyErrorMessage(err), variant: 'destructive' })
       setNoteContent('')
     } finally {
       setIsLoadingNote(false)
@@ -102,7 +103,7 @@ export function SubjectChapterList({ subjects, userId }: SubjectChapterListProps
                 <div className="flex items-center gap-2.5">
                   <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
                   <span className="text-sm font-bold text-neutral-800 dark:text-neutral-100">
-                    {subject.name}
+                    {localizeSubjectName(subject.name, i18n.language)}
                   </span>
                   <span className="text-xs font-semibold text-neutral-400">
                     {subject.completedCount}/{subject.totalCount}
@@ -149,7 +150,11 @@ export function SubjectChapterList({ subjects, userId }: SubjectChapterListProps
                                   : 'text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 bg-neutral-100 dark:bg-neutral-800'
                               )}
                               style={chapter.hasNote ? { backgroundColor: color } : undefined}
-                              title={chapter.hasNote ? 'Edit note' : 'Add note'}
+                              title={
+                                chapter.hasNote
+                                  ? t('common.student_dashboard.chapter_list.edit_note', 'Edit note')
+                                  : t('common.student_dashboard.chapter_list.add_note', 'Add note')
+                              }
                             >
                               <NotebookPen size={15} />
                             </button>
@@ -164,7 +169,11 @@ export function SubjectChapterList({ subjects, userId }: SubjectChapterListProps
                               }
                               disabled={revisionMutation.isPending}
                               className="inline-flex items-center justify-center w-8 h-8 rounded-lg transition-all hover:scale-110 active:scale-95"
-                              title={chapter.needsRevision ? 'Marked for revision' : 'Mark for revision'}
+                              title={
+                                chapter.needsRevision
+                                  ? t('common.student_dashboard.chapter_list.marked_revision', 'Marked for revision')
+                                  : t('common.student_dashboard.chapter_list.mark_revision', 'Mark for revision')
+                              }
                             >
                               <Star
                                 size={17}

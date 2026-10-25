@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslation } from 'react-i18next'
 import { Bot, Camera, Loader2, Mic, MicOff, Send, Volume2, VolumeX, X } from 'lucide-react'
 import Image from 'next/image'
 import { useEffect, useRef, useState } from 'react'
@@ -27,6 +28,7 @@ import MarkdownRenderer from './MarkdownRenderer'
 const STREAM_ERROR_MARKER = '[[STREAM_ERROR]]'
 
 export function AIChatBot() {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const { activeChapter } = useChapterStore()
   const { user } = useUserStore()
@@ -142,7 +144,7 @@ export function AIChatBot() {
           // response body — usually an HTML error page — which must never
           // be streamed into the chat as if it were a real answer.
           throw new Error(
-            'Something went wrong generating a response. Please try again in a moment.'
+            t('common.ui.chat_generic_error', 'Something went wrong generating a response. Please try again in a moment.')
           )
         }
 
@@ -180,7 +182,7 @@ export function AIChatBot() {
             console.error('[AIChatBot] Stream error from server:', finalErrorMsg)
             toast({
               variant: 'destructive',
-              title: 'Chatbot Error',
+              title: t('common.ui.chat_error_title', 'Chatbot Error'),
               description: finalErrorMsg,
             })
             break
@@ -208,7 +210,7 @@ export function AIChatBot() {
         const errorMsg = error instanceof Error ? error.message : CHATBOT_GENERAL_ERROR
         console.error('[AIChatBot] Failed to fetch/stream chatbot response:', error)
         appendToMessage(chapterId, botMessage.id, errorMsg)
-        toast({ variant: 'destructive', title: 'Error', description: errorMsg })
+        toast({ variant: 'destructive', title: t('common.ui.error', 'Error'), description: errorMsg })
       } finally {
         setIsTyping(false)
       }
@@ -265,8 +267,8 @@ export function AIChatBot() {
       } else {
         toast({
           variant: 'destructive',
-          title: 'Could not read the image',
-          description: 'Please try a clearer photo, or type your question instead.',
+          title: t('common.ui.ocr_fail_title', 'Could not read the image'),
+          description: t('common.ui.ocr_fail_desc', 'Please try a clearer photo, or type your question instead.'),
         })
       }
     } finally {
@@ -290,7 +292,7 @@ export function AIChatBot() {
                 <div className="flex items-center gap-1.5">
                   <div className="w-1.5 h-1.5 bg-green-300 rounded-full animate-pulse" />
                   <p className="text-[10px] text-white/70 uppercase tracking-wider font-bold">
-                    Online
+                    {t('common.ui.online', 'Online')}
                   </p>
                 </div>
               </div>
@@ -336,7 +338,7 @@ export function AIChatBot() {
                   {msg.role === 'bot' && msg.content && isSpeakerSupported && (
                     <button
                       onClick={() => handleSpeakClick(msg.id, msg.content)}
-                      aria-label={speakingId === msg.id ? 'Stop reading aloud' : 'Read aloud'}
+                      aria-label={speakingId === msg.id ? t('common.ui.stop_reading', 'Stop reading aloud') : t('common.ui.read_aloud', 'Read aloud')}
                       className="absolute -bottom-2 -right-2 w-6 h-6 bg-white text-primary rounded-full shadow-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                       {speakingId === msg.id ? <VolumeX size={12} /> : <Volume2 size={12} />}
@@ -365,15 +367,15 @@ export function AIChatBot() {
           <div className="p-4 bg-white border-t border-neutral-100 shrink-0">
             {isListening && (
               <p className="text-[11px] text-primary font-semibold mb-1.5 animate-pulse">
-                Listening…
+                {t('common.ui.listening', 'Listening…')}
               </p>
             )}
             {isReadingImage && (
               <p className="text-[11px] text-primary font-semibold mb-1.5 flex items-center gap-1">
                 <Loader2 size={12} className="animate-spin" />
                 {ocrStage === 'reading-with-ai'
-                  ? 'Having trouble reading it, trying a smarter pass…'
-                  : 'Reading your photo…'}
+                  ? t('common.ui.ocr_retry', 'Having trouble reading it, trying a smarter pass…')
+                  : t('common.ui.ocr_reading', 'Reading your photo…')}
               </p>
             )}
             <div className="relative flex items-center gap-1.5">
@@ -388,7 +390,7 @@ export function AIChatBot() {
               <button
                 onClick={handleCameraClick}
                 disabled={isReadingImage}
-                aria-label="Photograph a problem"
+                aria-label={t('common.ui.photo_problem', 'Photograph a problem')}
                 className="p-3 text-primary bg-primary/10 rounded-xl hover:bg-primary/20 transition-all shrink-0 disabled:opacity-50"
               >
                 <Camera size={18} />
@@ -396,7 +398,7 @@ export function AIChatBot() {
               {isMicSupported && (
                 <button
                   onClick={handleMicClick}
-                  aria-label={isListening ? 'Stop voice input' : 'Ask by voice'}
+                  aria-label={isListening ? t('common.ui.stop_voice', 'Stop voice input') : t('common.ui.ask_voice', 'Ask by voice')}
                   className={cn(
                     'p-3 rounded-xl transition-all shrink-0',
                     isListening
@@ -412,7 +414,7 @@ export function AIChatBot() {
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-                placeholder="Type, speak, or snap a photo…"
+                placeholder={t('common.ui.chat_placeholder', 'Type, speak, or snap a photo…')}
                 className="flex-1 min-w-0 px-4 py-3 text-white bg-primary rounded-2xl text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
               />
               <button

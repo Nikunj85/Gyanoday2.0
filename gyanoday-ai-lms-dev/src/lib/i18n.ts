@@ -5,14 +5,18 @@ import LanguageDetector from 'i18next-browser-languagedetector'
 import resourcesToBackend from 'i18next-resources-to-backend'
 import { initReactI18next } from 'react-i18next'
 
+import { withExtraTranslations } from './i18n-extra'
+
 i18next
   .use(initReactI18next)
   .use(LanguageDetector)
   .use(
-    resourcesToBackend(
-      (language: string, namespace: string) =>
-        import(`../../public/locales/${language}/${namespace}.json`)
-    )
+    resourcesToBackend(async (language: string, namespace: string) => {
+      const mod = await import(`../../public/locales/${language}/${namespace}.json`)
+      const data = (mod as any).default ?? mod
+      // Merge the Hindi/Gujarati additions on top of the JSON file.
+      return namespace === 'common' ? withExtraTranslations(language, data) : data
+    })
   )
   .init({
     fallbackLng: 'en',

@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslation } from 'react-i18next'
 import { CheckCircle2, Clock, Target, XCircle } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
@@ -21,6 +22,7 @@ export function QuizScoreCard({
   topic,
   onReviewClick,
 }: QuizScoreCardProps) {
+  const { t } = useTranslation()
   const percentage = total > 0 ? Math.round((score / total) * 100) : 0
   const passed = total > 0 && score / total >= passThreshold
   const incorrect = total - score
@@ -63,7 +65,9 @@ export function QuizScoreCard({
             passed ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'
           )}
         >
-          {passed ? 'Great job!' : 'Keep practicing'}
+          {passed
+            ? t('common.ui.great_job', 'Great job!')
+            : t('common.ui.keep_practicing', 'Keep practicing')}
         </p>
       </div>
 
@@ -72,19 +76,19 @@ export function QuizScoreCard({
         <div className="flex flex-col items-center py-4 gap-1">
           <CheckCircle2 size={16} className="text-emerald-500" />
           <p className="text-lg font-bold text-neutral-900 dark:text-white tabular-nums">{score}</p>
-          <p className="text-[11px] text-neutral-400 uppercase tracking-wide">Correct</p>
+          <p className="text-[11px] text-neutral-400 uppercase tracking-wide">{t('common.ui.correct', 'Correct')}</p>
         </div>
         <div className="flex flex-col items-center py-4 gap-1">
           <XCircle size={16} className="text-red-400" />
           <p className="text-lg font-bold text-neutral-900 dark:text-white tabular-nums">
             {incorrect}
           </p>
-          <p className="text-[11px] text-neutral-400 uppercase tracking-wide">Missed</p>
+          <p className="text-[11px] text-neutral-400 uppercase tracking-wide">{t('common.ui.missed', 'Missed')}</p>
         </div>
         <div className="flex flex-col items-center py-4 gap-1">
           <Clock size={16} className="text-neutral-400" />
           <p className="text-lg font-bold text-neutral-900 dark:text-white tabular-nums">{time}</p>
-          <p className="text-[11px] text-neutral-400 uppercase tracking-wide">Time</p>
+          <p className="text-[11px] text-neutral-400 uppercase tracking-wide">{t('common.ui.time', 'Time')}</p>
         </div>
       </div>
 
@@ -94,7 +98,7 @@ export function QuizScoreCard({
           onClick={onReviewClick}
           className="w-full py-3.5 rounded-2xl border-2 border-primary/20 text-primary font-bold text-sm hover:bg-primary/5 transition-colors"
         >
-          Review Answers
+          {t('common.quiz_result.buttons.review', 'Review Answers')}
         </button>
       </div>
     </div>

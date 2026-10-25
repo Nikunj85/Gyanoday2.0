@@ -1,9 +1,21 @@
 'use client'
 
-import { Check } from 'lucide-react'
+import {
+  ArrowRight,
+  BookOpen,
+  BookText,
+  Calculator,
+  Check,
+  FlaskConical,
+  Globe,
+  Laptop,
+  Palette,
+} from 'lucide-react'
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { localizeSubjectName } from '@/lib/subject-names'
 import { Subject } from '@/types/subjects'
 
 interface SubjectCardProps {
@@ -13,72 +25,176 @@ interface SubjectCardProps {
   totalChapters?: number
 }
 
+type Lang = 'en' | 'hi' | 'gu'
+
+interface Copy {
+  notStarted: string
+  inProgress: string
+  completed: string
+  start: string
+  continue: string
+  review: string
+  lessonsOf: (done: number, total: number) => string
+  noLessons: string
+}
+
+// Built in so the card is correct in all three mediums even before locale files get new keys.
+export const SUBJECT_CARD_COPY: Record<Lang, Copy> = {
+  en: {
+    notStarted: 'Not started',
+    inProgress: 'In progress',
+    completed: 'Completed',
+    start: 'Start learning',
+    continue: 'Continue',
+    review: 'Review',
+    lessonsOf: (d, t) => `${d} of ${t} lessons`,
+    noLessons: 'No lessons yet',
+  },
+  hi: {
+    notStarted: 'शुरू नहीं हुआ',
+    inProgress: 'जारी है',
+    completed: 'पूरा हुआ',
+    start: 'सीखना शुरू करें',
+    continue: 'जारी रखें',
+    review: 'दोहराएँ',
+    lessonsOf: (d, t) => `${t} में से ${d} पाठ`,
+    noLessons: 'अभी कोई पाठ नहीं',
+  },
+  gu: {
+    notStarted: 'શરૂ થયું નથી',
+    inProgress: 'ચાલુ છે',
+    completed: 'પૂર્ણ',
+    start: 'શીખવાનું શરૂ કરો',
+    continue: 'ચાલુ રાખો',
+    review: 'ફરી જુઓ',
+    lessonsOf: (d, t) => `${t} માંથી ${d} પાઠ`,
+    noLessons: 'હજી કોઈ પાઠ નથી',
+  },
+}
+
+/** Picks an icon (or the subject's own script letter) from the subject name. */
+function SubjectGlyph({ name }: { name: string }) {
+  const n = name.toLowerCase()
+  const common = { size: 26, strokeWidth: 2.2 }
+
+  if (/hindi|हिन्दी|हिंदी/.test(n)) return <span className="text-2xl font-black leading-none">अ</span>
+  if (/gujarati|ગુજરાતી/.test(n)) return <span className="text-2xl font-black leading-none">ગ</span>
+  if (/sanskrit|संस्कृत/.test(n)) return <span className="text-2xl font-black leading-none">सं</span>
+  if (/math|गणित|ગણિત/.test(n)) return <Calculator {...common} />
+  if (/science|physics|chemistry|biology|विज्ञान|વિજ્ઞાન/.test(n)) return <FlaskConical {...common} />
+  if (/english/.test(n)) return <BookText {...common} />
+  if (/social|history|geography|civics|सामाजिक|સામાજિક/.test(n)) return <Globe {...common} />
+  if (/computer|\bit\b|coding/.test(n)) return <Laptop {...common} />
+  if (/art|drawing|craft/.test(n)) return <Palette {...common} />
+  return <BookOpen {...common} />
+}
+
 export const SubjectCard = ({
   subject,
   index,
   completedChapters = 0,
   totalChapters = 0,
 }: SubjectCardProps) => {
+  const { i18n } = useTranslation()
+  const displayName = localizeSubjectName(subject.name, i18n.language)
+  const lang = ((i18n.language || 'en').split('-')[0] as Lang) in SUBJECT_CARD_COPY
+    ? ((i18n.language || 'en').split('-')[0] as Lang)
+    : 'en'
+  const copy = SUBJECT_CARD_COPY[lang]
+
   const progress = totalChapters > 0 ? Math.round((completedChapters / totalChapters) * 100) : 0
+  const isCompleted = totalChapters > 0 && completedChapters >= totalChapters
+  const isStarted = completedChapters > 0
   const baseColor = subject.color_code || '#B188C0'
-  const isCompleted = completedChapters === totalChapters && totalChapters > 0
-  const { t } = useTranslation()
+
+  // Fade the card in and grow the progress bar from 0 on first paint.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setMounted(true))
+    return () => cancelAnimationFrame(id)
+  }, [])
+  const barWidth = mounted ? progress : 0
+
+  const statusLabel = isCompleted ? copy.completed : isStarted ? copy.inProgress : copy.notStarted
+  const ctaLabel = isCompleted ? copy.review : isStarted ? copy.continue : copy.start
 
   return (
-    <div className="relative group">
-      <Link href={`/subjects/${subject.id}`} className="block w-full">
-        <div
-          className="relative w-full rounded-2xl md:rounded-[2rem] p-4 md:p-12 flex flex-col items-center justify-center text-white overflow-hidden transition-all duration-300 group-hover:scale-[1.02] group-hover:shadow-md shadow-md"
-          style={{ backgroundColor: baseColor }}
-        >
-          {/* Corner Accent – Top Left */}
-          <div className="absolute top-2 left-2 md:top-4 md:left-4 w-6 h-6 md:w-10 md:h-10 pointer-events-none">
-            <div className="absolute inset-0 border-t-[3px] md:border-t-[6px] border-l-[3px] md:border-l-[6px] border-white/35 rounded-tl-lg md:rounded-tl-2xl" />
+    <Link
+      href={`/subjects/${subject.id}`}
+      className="group block h-full rounded-3xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-offset-2"
+      style={{ ['--tw-ring-color' as string]: `${baseColor}66` }}
+      aria-label={`${displayName}: ${copy.lessonsOf(completedChapters, totalChapters)}`}
+    >
+      <div
+        className={`relative flex h-full min-h-[220px] flex-col overflow-hidden rounded-3xl p-5 text-white shadow-lg transition-all duration-500 group-hover:-translate-y-1.5 group-hover:shadow-2xl motion-reduce:transition-none md:p-6 ${
+          mounted ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
+        }`}
+        style={{
+          backgroundColor: baseColor,
+          backgroundImage: `linear-gradient(140deg, ${baseColor} 0%, color-mix(in srgb, ${baseColor} 68%, #000) 100%)`,
+          transitionDelay: `${Math.min(index, 8) * 70}ms`,
+        }}
+      >
+        {/* Decorative shapes */}
+        <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-white/10 transition-transform duration-500 group-hover:scale-125" />
+        <div className="pointer-events-none absolute -bottom-12 -left-8 h-32 w-32 rounded-full bg-white/10" />
+
+        {/* Top row: icon + status */}
+        <div className="relative flex items-start justify-between gap-3">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20 shadow-inner ring-1 ring-white/30 backdrop-blur-sm">
+            <SubjectGlyph name={subject.name} />
           </div>
 
-          {/* Corner Accent – Bottom Right */}
-          <div className="absolute bottom-2 right-2 md:bottom-4 md:right-4 w-6 h-6 md:w-10 md:h-10 pointer-events-none">
-            <div className="absolute inset-0 border-b-[3px] md:border-b-[6px] border-r-[3px] md:border-r-[6px] border-white/35 rounded-br-lg md:rounded-br-2xl" />
-          </div>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-xs font-bold ring-1 ring-white/25 backdrop-blur-sm">
+            {isCompleted ? (
+              <Check size={13} strokeWidth={4} />
+            ) : (
+              <span
+                className={`h-2 w-2 rounded-full ${isStarted ? 'bg-white' : 'bg-white/50'}`}
+              />
+            )}
+            {statusLabel}
+          </span>
+        </div>
 
-          {/* Card Content */}
-          <h3 className="text-sm md:text-2xl font-bold mb-1 md:mb-3 pt-3 drop-shadow-md text-center line-clamp-2">
-            {subject.name}
+        {/* Name + lessons */}
+        <div className="relative mt-5 flex-1">
+          <h3 className="line-clamp-2 text-2xl font-extrabold leading-tight drop-shadow-sm md:text-[1.7rem]">
+            {displayName}
           </h3>
+          <p className="mt-1.5 text-sm font-medium text-white/85 md:text-base">
+            {totalChapters > 0 ? copy.lessonsOf(completedChapters, totalChapters) : copy.noLessons}
+          </p>
+        </div>
 
-          <div className="flex flex-col items-center mb-3 md:mb-6">
-            <span className="text-[10px] md:text-md font-medium opacity-80 uppercase tracking-wider">
-              {t('common.student_dashboard.subjects.lessons')}
-            </span>
-            <span className="text-lg md:text-2xl font-black drop-shadow-sm">
-              {completedChapters}/{totalChapters}
-            </span>
+        {/* Progress */}
+        <div className="relative mt-5">
+          <div className="mb-1.5 flex items-center justify-between text-xs font-bold text-white/90">
+            <span>{progress}%</span>
           </div>
-
-          {/* Progress Bar - Modern Inset Style */}
-          <div className="w-full max-w-[80%] h-3 md:h-5 bg-black/10 rounded-full border border-white/20 p-0.5 md:p-1 shadow-inner relative overflow-hidden">
+          <div
+            className="h-3 w-full overflow-hidden rounded-full bg-black/20 ring-1 ring-white/15"
+            role="progressbar"
+            aria-valuenow={progress}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
             <div
-              className="h-full bg-white/60 rounded-full  shadow-sm"
-              style={{ width: `${progress}%` }}
-            />
-            {/* Progress shine effect */}
-            <div
-              className="absolute inset-0 w-20 h-full -skew-x-12 animate-pulse"
-              style={{ left: `${Math.min(progress, 90)}%` }}
+              className="h-full rounded-full bg-white shadow-sm transition-[width] duration-1000 ease-out"
+              style={{ width: `${barWidth}%` }}
             />
           </div>
         </div>
-      </Link>
 
-      {/* Completed Badge */}
-      {isCompleted && (
-        <div
-          className="absolute -top-2 -right-2 z-20 w-8 h-8 rounded-full flex items-center justify-center text-white shadow-lg border-2 border-white animate-bounce"
-          style={{ backgroundColor: baseColor }}
-        >
-          <Check size={18} strokeWidth={4} />
+        {/* CTA */}
+        <div className="relative mt-4 flex items-center justify-between border-t border-white/20 pt-3">
+          <span className="text-sm font-bold md:text-base">{ctaLabel}</span>
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 transition-all duration-300 group-hover:translate-x-1 group-hover:bg-white group-hover:text-neutral-800">
+            <ArrowRight size={16} strokeWidth={3} />
+          </span>
         </div>
-      )}
-    </div>
+      </div>
+
+    </Link>
   )
 }

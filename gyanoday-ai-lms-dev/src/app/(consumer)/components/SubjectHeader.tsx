@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { localizeSubjectName } from '@/lib/subject-names'
+
 import { TopicQuizLauncher } from '@/components/common/TopicQuizLauncher'
 import { Subject } from '@/types'
 
@@ -57,11 +59,13 @@ export function SubjectHeader({
   activeChapterId,
   userId,
 }: SubjectHeaderProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const progress = totalChapters > 0 ? (completedChapters / totalChapters) * 100 : 0
   const [isSummaryOpen, setIsSummaryOpen] = useState(false)
 
-  const subjectName = subject?.name || 'Subject'
+  const subjectName = subject?.name
+    ? localizeSubjectName(subject.name, i18n.language)
+    : t('common.subject', 'Subject')
 
   const handleOpenSummary = () => {
     if (onSummaryClick) {
@@ -182,7 +186,7 @@ export function SubjectHeader({
                 {subjectName}
               </h1>
               <p className="text-white/90 text-center text-sm xl:text-md font-bold px-2 line-clamp-1 uppercase tracking-wide pointer-events-auto">
-                {activeChapterTitle || 'Loading chapter...'}
+                {activeChapterTitle || t('common.ui.loading_chapter', 'Loading chapter...')}
               </p>
 
               <div className="flex items-center gap-1 xl:gap-2 mt-6 lg:mt-2 2xl:mt-10 pointer-events-auto">
@@ -297,8 +301,8 @@ export function SubjectHeader({
       <SmartSummaryDialog
         isOpen={isSummaryOpen}
         onClose={() => setIsSummaryOpen(false)}
-        title={activeChapterTitle || 'Chapter Summary'}
-        description={activeChapterDescription || 'No summary available for this chapter.'}
+        title={activeChapterTitle || t('common.ui.chapter_summary', 'Chapter Summary')}
+        description={activeChapterDescription || t('common.ui.no_summary', 'No summary available for this chapter.')}
         themeColor={themeColor}
         chapterPerformance={chapterPerformance}
         weakTopics={weakTopics}

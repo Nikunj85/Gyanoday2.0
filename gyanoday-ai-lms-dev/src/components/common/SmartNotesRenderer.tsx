@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   BookOpen,
@@ -23,6 +24,7 @@ interface SmartNotesProps {
 
 /** One active-recall flashcard — prompt visible, answer hidden until tapped. */
 function RecallToggle({ prompt, answer, index }: { prompt: string; answer: string; index: number }) {
+  const { t } = useTranslation()
   const [isRevealed, setIsRevealed] = useState(false)
 
   return (
@@ -62,7 +64,7 @@ function RecallToggle({ prompt, answer, index }: { prompt: string; answer: strin
           </motion.div>
         ) : (
           <p className="text-[11px] font-bold uppercase tracking-wide text-indigo-500 mt-2">
-            Tap to reveal
+            {t('common.ui.tap_to_reveal', 'Tap to reveal')}
           </p>
         )}
       </AnimatePresence>
@@ -83,6 +85,7 @@ function FeedbackModule({
   correctAnswer: string
   index: number
 }) {
+  const { t } = useTranslation()
   const [selected, setSelected] = useState<string | null>(null)
 
   return (
@@ -143,7 +146,12 @@ function FeedbackModule({
               : 'text-red-500 dark:text-red-400'
           )}
         >
-          {selected === correctAnswer ? "Correct! Nice work." : `Not quite — the answer is "${correctAnswer}".`}
+          {selected === correctAnswer
+            ? t('common.ui.notes_correct', 'Correct! Nice work.')
+            : t('common.ui.notes_wrong', {
+                defaultValue: 'Not quite — the answer is "{{answer}}".',
+                answer: correctAnswer,
+              })}
         </motion.p>
       )}
     </motion.div>
@@ -180,6 +188,7 @@ function LayerHeader({
  *   - Feedback Layer: instant-feedback quiz modules embedded in the notes.
  */
 export const SmartNotesRenderer = ({ notes }: SmartNotesProps) => {
+  const { t } = useTranslation()
   const hasNotes =
     !!notes &&
     !!notes.core_layer &&
@@ -209,11 +218,14 @@ export const SmartNotesRenderer = ({ notes }: SmartNotesProps) => {
         </div>
         <div>
           <h2 className="text-lg font-bold text-neutral-900 dark:text-white flex items-center gap-2">
-            Living Smart Notes
+            {t('common.ui.smart_notes_title', 'Living Smart Notes')}
             <Sparkles className="w-4 h-4 text-amber-500 fill-amber-500" />
           </h2>
           <p className="text-xs text-neutral-500 dark:text-neutral-400">
-            Read the core notes, test recall, then check your understanding.
+            {t(
+              'common.ui.smart_notes_subtitle',
+              'Read the core notes, test recall, then check your understanding.'
+            )}
           </p>
         </div>
       </div>
@@ -222,8 +234,8 @@ export const SmartNotesRenderer = ({ notes }: SmartNotesProps) => {
       <section>
         <LayerHeader
           icon={<BookOpen size={16} />}
-          label="Core Layer"
-          description="The chapter, explained"
+          label={t('common.ui.core_layer', 'Core Layer')}
+          description={t('common.ui.core_layer_desc', 'The chapter, explained')}
         />
         <div className="border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-neutral-900 rounded-2xl p-5">
           <MarkdownRenderer content={notes!.core_layer} className="text-sm leading-relaxed" />
@@ -235,8 +247,8 @@ export const SmartNotesRenderer = ({ notes }: SmartNotesProps) => {
         <section>
           <LayerHeader
             icon={<Layers size={16} />}
-            label="Interactive Layer"
-            description="Tap each card to test your recall"
+            label={t('common.ui.interactive_layer', 'Interactive Layer')}
+            description={t('common.ui.interactive_layer_desc', 'Tap each card to test your recall')}
           />
           <div className="grid gap-3 sm:grid-cols-2">
             {notes!.interactive_layer.map((item, idx) => (
@@ -251,8 +263,8 @@ export const SmartNotesRenderer = ({ notes }: SmartNotesProps) => {
         <section>
           <LayerHeader
             icon={<MessageCircleQuestion size={16} />}
-            label="Feedback Layer"
-            description="Quick checks with instant feedback"
+            label={t('common.ui.feedback_layer', 'Feedback Layer')}
+            description={t('common.ui.feedback_layer_desc', 'Quick checks with instant feedback')}
           />
           <div className="space-y-3">
             {notes!.feedback_layer.map((q, idx) => (

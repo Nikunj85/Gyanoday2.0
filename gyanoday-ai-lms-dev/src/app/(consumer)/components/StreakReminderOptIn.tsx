@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslation } from 'react-i18next'
 import { Bell, BellOff, BellRing, Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
@@ -14,6 +15,7 @@ import { pushNotificationService } from '@/services/push-notification-service'
  * the dashboard from rendering.
  */
 export function StreakReminderOptIn() {
+  const { t } = useTranslation()
   const [status, setStatus] = useState<'checking' | 'unsupported' | 'off' | 'on' | 'denied'>(
     'checking'
   )
@@ -42,20 +44,20 @@ export function StreakReminderOptIn() {
       const ok = await pushNotificationService.enable()
       setStatus(ok ? 'on' : 'off')
       if (ok) {
-        toast({ title: 'Daily reminders are on', description: "We'll nudge you if you haven't studied yet today." })
+        toast({ title: t('common.ui.rem_on_title', 'Daily reminders are on'), description: t('common.ui.rem_on_desc', "We'll nudge you if you haven't studied yet today.") })
       } else if (Notification.permission === 'denied') {
         setStatus('denied')
         toast({
-          title: 'Notifications are blocked',
-          description: 'Allow notifications for this site in your browser settings, then try again.',
+          title: t('common.ui.rem_blocked_title', 'Notifications are blocked'),
+          description: t('common.ui.rem_blocked_desc', 'Allow notifications for this site in your browser settings, then try again.'),
           variant: 'destructive',
         })
       }
     } catch (error) {
       setStatus('off')
       toast({
-        title: "Couldn't turn on reminders",
-        description: error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+        title: t('common.ui.rem_fail_on', "Couldn't turn on reminders"),
+        description: error instanceof Error ? error.message : t('common.ui.try_again', 'Something went wrong. Please try again.'),
         variant: 'destructive',
       })
     } finally {
@@ -69,7 +71,7 @@ export function StreakReminderOptIn() {
       await pushNotificationService.disable()
       setStatus('off')
     } catch {
-      toast({ title: "Couldn't turn off reminders", description: 'Please try again.', variant: 'destructive' })
+      toast({ title: t('common.ui.rem_fail_off', "Couldn't turn off reminders"), description: t('common.ui.try_again_short', 'Please try again.'), variant: 'destructive' })
     } finally {
       setIsWorking(false)
     }
@@ -83,7 +85,7 @@ export function StreakReminderOptIn() {
         onClick={handleDisable}
         disabled={isWorking}
         className="group flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-1.5 rounded-full transition-all hover:bg-emerald-100 dark:hover:bg-emerald-950/50"
-        title="Turn off streak reminders"
+        title={t('common.ui.rem_turn_off', 'Turn off streak reminders')}
       >
         {isWorking ? (
           <Loader2 size={13} className="animate-spin" />
@@ -91,7 +93,7 @@ export function StreakReminderOptIn() {
           <BellRing size={13} className="group-hover:hidden" />
         )}
         {!isWorking && <BellOff size={13} className="hidden group-hover:block" />}
-        <span>Reminders on</span>
+        <span>{t('common.ui.rem_on', 'Reminders on')}</span>
       </button>
     )
   }
@@ -101,10 +103,10 @@ export function StreakReminderOptIn() {
       onClick={handleEnable}
       disabled={isWorking}
       className="flex items-center gap-1.5 text-xs font-semibold text-primary bg-primary/5 hover:bg-primary/10 px-3 py-1.5 rounded-full transition-all active:scale-95"
-      title="Get a gentle nudge if you haven't studied yet today"
+      title={t('common.ui.rem_nudge', "Get a gentle nudge if you haven't studied yet today")}
     >
       {isWorking ? <Loader2 size={13} className="animate-spin" /> : <Bell size={13} />}
-      <span>Remind me daily</span>
+      <span>{t('common.ui.rem_daily', 'Remind me daily')}</span>
     </button>
   )
 }

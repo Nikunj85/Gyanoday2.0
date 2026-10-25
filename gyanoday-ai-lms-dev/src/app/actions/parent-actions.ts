@@ -1,5 +1,6 @@
 'use server'
 
+import { chapterLanguageFilter, getEquivalentClassIds } from '@/lib/class-utils'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { UserRole } from '@/types/users'
@@ -160,7 +161,7 @@ export async function getChildProgressSummary(studentId: string): Promise<ChildP
 
   const { data: studentData, error: studentError } = await supabaseAdmin
     .from('users')
-    .select('id, name, class_id')
+    .select('id, name, class_id, language')
     .eq('id', studentId)
     .maybeSingle()
   if (studentError) throw studentError
@@ -182,7 +183,8 @@ export async function getChildProgressSummary(studentId: string): Promise<ChildP
       ? supabaseAdmin
           .from('chapters')
           .select('id', { count: 'exact', head: true })
-          .eq('class_id', studentData.class_id)
+          .in('class_id', await getEquivalentClassIds(supabaseAdmin, studentData.class_id))
+          .or(chapterLanguageFilter(studentData.language))
           .eq('is_visible', true)
       : Promise.resolve({ count: 0 }),
     supabaseAdmin

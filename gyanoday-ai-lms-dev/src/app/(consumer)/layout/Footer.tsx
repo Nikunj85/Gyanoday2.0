@@ -122,7 +122,7 @@ export function Footer() {
             <p>© {currentYear} Gyanoday Learning. All Rights Reserved.</p>
             {/*<span className="hidden md:block opacity-30 text-lg font-light">|</span>
             <p className="flex items-center gap-1.5">
-              <span>Powered by</span>
+              <span>{t('common.ui.powered_by', 'Powered by')}</span>
               <Link
                 href="https://probietech.com"
                 target="_blank"

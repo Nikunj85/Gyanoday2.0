@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client'
+import { chapterLanguageFilter, getEquivalentClassIds } from '@/lib/class-utils'
 import { Chapter } from '@/types'
 
 const supabase = createClient()
@@ -39,6 +40,7 @@ export const chapterService = {
     search = '',
     subjectId = null,
     classId = null,
+    classIds = null,
     isVisibleFilter = null,
     languageFilter = 'all',
     client = null,
@@ -48,6 +50,8 @@ export const chapterService = {
     search?: string
     subjectId?: string | null
     classId?: string | null
+    /** Several class rows treated as one class (same class name, different medium). */
+    classIds?: string[] | null
     isVisibleFilter?: boolean | null
     languageFilter?: string
     client?: any
@@ -69,12 +73,14 @@ export const chapterService = {
       query = query.eq('subject_id', subjectId)
     }
 
-    if (classId) {
+    if (classIds && classIds.length > 0) {
+      query = query.in('class_id', classIds)
+    } else if (classId) {
       query = query.eq('class_id', classId)
     }
 
     if (languageFilter && languageFilter !== 'all') {
-      query = query.eq('language', languageFilter)
+      query = query.or(chapterLanguageFilter(languageFilter))
     }
 
     const start = (page - 1) * pageSize
@@ -164,7 +170,12 @@ export const chapterService = {
     return true
   },
 
-  async getSubjectProgress(userId: string, subjectIds: string[], classId?: string | null) {
+  async getSubjectProgress(
+    userId: string,
+    subjectIds: string[],
+    classId?: string | null,
+    language?: string | null
+  ) {
     if (!subjectIds.length) return {}
 
     // 1. Get all chapters for these subjects to count totals
@@ -175,7 +186,12 @@ export const chapterService = {
       .eq('is_visible', true)
 
     if (classId) {
-      query = query.eq('class_id', classId)
+      query = query.in('class_id', await getEquivalentClassIds(supabase, classId))
+    }
+
+    // Only count chapters in the student's medium.
+    if (language) {
+      query = query.or(chapterLanguageFilter(language))
     }
 
     const { data: allChapters, error: chaptersError } = await query

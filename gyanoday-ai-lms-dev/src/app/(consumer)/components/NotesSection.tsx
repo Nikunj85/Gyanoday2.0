@@ -48,7 +48,7 @@ export function NotesSection({ userId, themeColor = '#7C6FE0' }: NotesSectionPro
       setDraftContent('')
     },
     onError: (err) => {
-      toast({ title: "Couldn't save note", description: getFriendlyErrorMessage(err), variant: 'destructive' })
+      toast({ title: t('common.student_dashboard.chapter_list.note_save_failed', "Couldn't save note"), description: getFriendlyErrorMessage(err), variant: 'destructive' })
     },
   })
 
@@ -60,7 +60,7 @@ export function NotesSection({ userId, themeColor = '#7C6FE0' }: NotesSectionPro
       setEditingId(null)
     },
     onError: (err) => {
-      toast({ title: "Couldn't update note", description: getFriendlyErrorMessage(err), variant: 'destructive' })
+      toast({ title: t('common.ui.note_update_failed', "Couldn't update note"), description: getFriendlyErrorMessage(err), variant: 'destructive' })
     },
   })
 
@@ -68,7 +68,7 @@ export function NotesSection({ userId, themeColor = '#7C6FE0' }: NotesSectionPro
     mutationFn: (id: string) => notesService.deleteNote(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['student-notes', userId] }),
     onError: (err) => {
-      toast({ title: "Couldn't delete note", description: getFriendlyErrorMessage(err), variant: 'destructive' })
+      toast({ title: t('common.ui.note_delete_failed', "Couldn't delete note"), description: getFriendlyErrorMessage(err), variant: 'destructive' })
     },
   })
 
@@ -185,7 +185,7 @@ export function NotesSection({ userId, themeColor = '#7C6FE0' }: NotesSectionPro
                   <button
                     onClick={() => deleteMutation.mutate(note.id)}
                     className="absolute top-2.5 right-2.5 p-1 rounded-full text-neutral-400 hover:text-red-500 hover:bg-white/60 opacity-0 group-hover:opacity-100 transition-all"
-                    title="Delete note"
+                    title={t('common.ui.note_delete', 'Delete note')}
                   >
                     <Trash2 size={13} />
                   </button>

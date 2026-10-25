@@ -3,14 +3,17 @@
 import { useQuery } from '@tanstack/react-query'
 import { Quote, Sparkles } from 'lucide-react'
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 
 export function MotivationQuote() {
+  const { t, i18n } = useTranslation()
+  const lang = (i18n.language || 'en').split('-')[0]
   const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
 
   const { data, isLoading } = useQuery({
-    queryKey: ['daily-motivation-quote', today],
+    queryKey: ['daily-motivation-quote', today, lang],
     queryFn: async () => {
-      const response = await fetch(`/api/motivation-quote?date=${today}`)
+      const response = await fetch(`/api/motivation-quote?date=${today}&lang=${lang}`)
       if (!response.ok) throw new Error('Unable to fetch motivation quote')
       return response.json() as Promise<{ quote: string; date: string }>
     },
@@ -30,7 +33,7 @@ export function MotivationQuote() {
         </div>
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-400 dark:text-neutral-500">
-            Daily Motivation
+            {t('common.student_dashboard.motivation.label', 'Daily Motivation')}
           </p>
           <h3 className="text-sm font-bold text-philosophy dark:text-lavender-mist">
             Siksha Inspire
@@ -47,7 +50,11 @@ export function MotivationQuote() {
           </div>
         ) : (
           <p className="text-sm font-medium leading-6 text-neutral-700 dark:text-neutral-300 md:text-base">
-            {data?.quote || 'Keep learning, keep growing, and trust your progress.'}
+            {data?.quote ||
+              t(
+                'common.student_dashboard.motivation.fallback',
+                'Keep learning, keep growing, and trust your progress.'
+              )}
           </p>
         )}
       </div>

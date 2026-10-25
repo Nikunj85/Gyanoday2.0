@@ -5,6 +5,7 @@ import '@/lib/i18n'
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { normalizeMedium } from '@/lib/class-utils'
 import { useUserStore } from '@/store/user-store'
 
 type LanguageContextType = {
@@ -20,13 +21,15 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const user = useUserStore((state) => state.user)
   const [language, setLanguageState] = useState(i18n.language || 'en')
 
-  // 1. Initial Sync: Only when user logs in
+  // 1. Sync: the whole app (every page) follows the student's medium of instruction —
+  // Hindi medium → Hindi UI, Gujarati medium → Gujarati UI, English medium → English.
+  // Re-runs when the medium changes (e.g. profile edit) as well as on login.
   useEffect(() => {
-    // When a user logs in, set the translation language to their medium language.
     if (user?.language) {
-      i18n.changeLanguage(user.language)
+      const medium = normalizeMedium(user.language)
+      if ((i18n.language || '').split('-')[0] !== medium) i18n.changeLanguage(medium)
     }
-  }, [user?.id]) // ONLY trigger when the user ID changes (login/logout)
+  }, [user?.id, user?.language, i18n])
 
   // 2. State Sync: Keep local state in sync with i18n
   useEffect(() => {
@@ -46,8 +49,6 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
   const setLanguage = async (lang: string) => {
     await i18n.changeLanguage(lang)
-    // Note: We intentionally DO NOT sync this back to the user's profile database.
-    // The translation language (UI) is now decoupled from the medium language (Content).
   }
 
   return (

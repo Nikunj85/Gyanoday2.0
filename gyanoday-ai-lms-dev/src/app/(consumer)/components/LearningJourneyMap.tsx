@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 
 import { SubjectProgressOverview } from '@/app/actions/student-progress-actions'
 import { cn } from '@/lib/utils'
+import { localizeSubjectName } from '@/lib/subject-names'
 
 interface LearningJourneyMapProps {
   subjects: SubjectProgressOverview[]
@@ -63,7 +64,7 @@ function ChapterNode({
 }
 
 export function LearningJourneyMap({ subjects }: LearningJourneyMapProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
 
   if (subjects.length === 0) return null
 
@@ -80,7 +81,7 @@ export function LearningJourneyMap({ subjects }: LearningJourneyMapProps) {
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
                 <h4 className="text-sm font-bold text-neutral-800 dark:text-neutral-100">
-                  {subject.name}
+                  {localizeSubjectName(subject.name, i18n.language)}
                 </h4>
               </div>
               <span className="text-xs font-semibold text-neutral-400">

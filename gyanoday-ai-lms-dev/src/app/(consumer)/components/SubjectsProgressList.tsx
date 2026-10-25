@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next'
 
 import { ChapterSignal, RevisionSignal, SubjectProgressOverview } from '@/app/actions/student-progress-actions'
 import { cn } from '@/lib/utils'
+import { localizeSubjectName } from '@/lib/subject-names'
 
 interface SubjectsProgressListProps {
   subjects: SubjectProgressOverview[]
@@ -29,6 +30,7 @@ type SignalKind = 'strong' | 'weak' | 'revision'
  * is open at a time per card.
  */
 function SignalRow({
+  openChapterLabel,
   id,
   label,
   detail,
@@ -37,6 +39,7 @@ function SignalRow({
   onToggle,
   onOpenChapter,
 }: {
+  openChapterLabel: string
   id: string
   label: string
   detail: React.ReactNode
@@ -80,7 +83,7 @@ function SignalRow({
               onClick={onOpenChapter}
               className="font-bold text-primary hover:underline"
             >
-              Open chapter →
+              {openChapterLabel} →
             </button>
           )}
         </div>
@@ -90,6 +93,7 @@ function SignalRow({
 }
 
 function SignalGroup({
+  openChapterLabel,
   items,
   empty,
   tone,
@@ -100,6 +104,7 @@ function SignalGroup({
   renderLabel,
   keyOf,
 }: {
+  openChapterLabel: string
   items: (ChapterSignal | RevisionSignal)[]
   empty: string
   tone: SignalKind
@@ -120,6 +125,7 @@ function SignalGroup({
         const key = keyOf(item)
         return (
           <SignalRow
+            openChapterLabel={openChapterLabel}
             key={key}
             id={key}
             label={renderLabel(item)}
@@ -136,7 +142,7 @@ function SignalGroup({
 }
 
 export function SubjectsProgressList({ subjects }: SubjectsProgressListProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const router = useRouter()
   // Track which single item is expanded, per card, as `${subjectId}:${itemKey}`.
   const [openItem, setOpenItem] = useState<string | null>(null)
@@ -165,14 +171,16 @@ export function SubjectsProgressList({ subjects }: SubjectsProgressListProps) {
               </h4>
             </div>
             <p className="mt-1 text-xs text-neutral-400">
-              Track progress, strengths, weak areas and revision topics subject by subject. Tap
-              any item for the numbers behind it.
+              {t(
+                'common.student_dashboard.subjects_list.subtitle',
+                'Track progress, strengths, weak areas and revision topics subject by subject. Tap any item for the numbers behind it.'
+              )}
             </p>
           </div>
           <div className="text-right shrink-0">
             <div className="text-xl font-black text-neutral-800 dark:text-white">{overallPct}%</div>
             <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
-              Overall progress
+              {t('common.student_dashboard.subjects_list.overall_progress', 'Overall progress')}
             </div>
           </div>
         </div>
@@ -185,9 +193,18 @@ export function SubjectsProgressList({ subjects }: SubjectsProgressListProps) {
         </div>
         <div className="flex items-center justify-between text-[11px] font-semibold text-neutral-400">
           <span>
-            {completedChapters} of {totalChapters} chapters completed
+            {t('common.student_dashboard.subjects_list.chapters_completed_of', {
+              defaultValue: '{{done}} of {{total}} chapters completed',
+              done: completedChapters,
+              total: totalChapters,
+            })}
           </span>
-          <span>{totalChapters - completedChapters} remaining</span>
+          <span>
+            {t('common.student_dashboard.subjects_list.remaining', {
+              defaultValue: '{{count}} remaining',
+              count: totalChapters - completedChapters,
+            })}
+          </span>
         </div>
       </div>
 
@@ -219,7 +236,7 @@ export function SubjectsProgressList({ subjects }: SubjectsProgressListProps) {
                   <div className="flex items-center gap-2 mb-2">
                     <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
                     <span className="font-extrabold text-sm text-neutral-800 dark:text-neutral-100 truncate">
-                      {subject.name}
+                      {localizeSubjectName(subject.name, i18n.language)}
                     </span>
                     <span className="ml-auto text-xs font-black text-neutral-500">{progress}%</span>
                   </div>
@@ -230,7 +247,11 @@ export function SubjectsProgressList({ subjects }: SubjectsProgressListProps) {
                     />
                   </div>
                   <div className="mt-1.5 text-[10px] font-semibold text-neutral-400">
-                    {subject.completedCount}/{subject.totalCount} chapters completed
+                    {t('common.student_dashboard.subjects_list.chapters_completed', {
+                      defaultValue: '{{done}}/{{total}} chapters completed',
+                      done: subject.completedCount,
+                      total: subject.totalCount,
+                    })}
                   </div>
                 </button>
 
@@ -238,11 +259,14 @@ export function SubjectsProgressList({ subjects }: SubjectsProgressListProps) {
                 <div className="min-w-0 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/20 p-3">
                   <div className="flex items-center gap-1.5 mb-2 text-emerald-700 dark:text-emerald-400">
                     <ShieldCheck size={14} />
-                    <span className="text-[10px] font-black uppercase tracking-wider">Strength</span>
+                    <span className="text-[10px] font-black uppercase tracking-wider">
+                      {t('common.student_dashboard.subjects_list.strength', 'Strength')}
+                    </span>
                   </div>
                   <SignalGroup
+                    openChapterLabel={t('common.student_dashboard.subjects_list.open_chapter', 'Open chapter')}
                     items={subject.strengths}
-                    empty="Keep practising to build a strength."
+                    empty={t('common.student_dashboard.subjects_list.empty_strength', 'Keep practising to build a strength.')}
                     tone="strong"
                     openKey={openKey}
                     onToggle={toggle}
@@ -251,8 +275,12 @@ export function SubjectsProgressList({ subjects }: SubjectsProgressListProps) {
                     renderLabel={(c: ChapterSignal) => c.title}
                     renderDetail={(c: ChapterSignal) => (
                       <p>
-                        Scored <span className="font-bold text-emerald-600">{c.scorePct}%</span> ·{' '}
-                        {c.attempts} {c.attempts === 1 ? 'attempt' : 'attempts'}
+                        {t('common.student_dashboard.subjects_list.scored', 'Scored')}{' '}
+                        <span className="font-bold text-emerald-600">{c.scorePct}%</span> ·{' '}
+                        {c.attempts}{' '}
+                        {c.attempts === 1
+                          ? t('common.student_dashboard.subjects_list.attempt', 'attempt')
+                          : t('common.student_dashboard.subjects_list.attempts', 'attempts')}
                       </p>
                     )}
                   />
@@ -262,11 +290,14 @@ export function SubjectsProgressList({ subjects }: SubjectsProgressListProps) {
                 <div className="min-w-0 rounded-xl bg-rose-50/70 dark:bg-rose-950/20 p-3">
                   <div className="flex items-center gap-1.5 mb-2 text-rose-700 dark:text-rose-400">
                     <TrendingDown size={14} />
-                    <span className="text-[10px] font-black uppercase tracking-wider">Weakness</span>
+                    <span className="text-[10px] font-black uppercase tracking-wider">
+                      {t('common.student_dashboard.subjects_list.weakness', 'Weakness')}
+                    </span>
                   </div>
                   <SignalGroup
+                    openChapterLabel={t('common.student_dashboard.subjects_list.open_chapter', 'Open chapter')}
                     items={subject.weaknesses}
-                    empty="No weak chapter detected."
+                    empty={t('common.student_dashboard.subjects_list.empty_weakness', 'No weak chapter detected.')}
                     tone="weak"
                     openKey={openKey}
                     onToggle={toggle}
@@ -275,8 +306,12 @@ export function SubjectsProgressList({ subjects }: SubjectsProgressListProps) {
                     renderLabel={(c: ChapterSignal) => c.title}
                     renderDetail={(c: ChapterSignal) => (
                       <p>
-                        Scored <span className="font-bold text-rose-600">{c.scorePct}%</span> ·{' '}
-                        {c.attempts} {c.attempts === 1 ? 'attempt' : 'attempts'}
+                        {t('common.student_dashboard.subjects_list.scored', 'Scored')}{' '}
+                        <span className="font-bold text-rose-600">{c.scorePct}%</span> ·{' '}
+                        {c.attempts}{' '}
+                        {c.attempts === 1
+                          ? t('common.student_dashboard.subjects_list.attempt', 'attempt')
+                          : t('common.student_dashboard.subjects_list.attempts', 'attempts')}
                       </p>
                     )}
                   />
@@ -286,11 +321,14 @@ export function SubjectsProgressList({ subjects }: SubjectsProgressListProps) {
                 <div className="min-w-0 rounded-xl bg-amber-50/70 dark:bg-amber-950/20 p-3">
                   <div className="flex items-center gap-1.5 mb-2 text-amber-700 dark:text-amber-400">
                     <RotateCcw size={14} />
-                    <span className="text-[10px] font-black uppercase tracking-wider">Revise Topics</span>
+                    <span className="text-[10px] font-black uppercase tracking-wider">
+                      {t('common.student_dashboard.subjects_list.revise_topics', 'Revise Topics')}
+                    </span>
                   </div>
                   <SignalGroup
+                    openChapterLabel={t('common.student_dashboard.subjects_list.open_chapter', 'Open chapter')}
                     items={subject.revisionTopics}
-                    empty="No revision topic yet."
+                    empty={t('common.student_dashboard.subjects_list.empty_revision', 'No revision topic yet.')}
                     tone="revision"
                     openKey={openKey}
                     onToggle={toggle}
@@ -299,7 +337,17 @@ export function SubjectsProgressList({ subjects }: SubjectsProgressListProps) {
                     renderLabel={(r: RevisionSignal) => r.topic}
                     renderDetail={(r: RevisionSignal) => (
                       <p>
-                        Flagged {r.timesFlagged}x{r.chapterTitle ? <> in <span className="font-semibold">{r.chapterTitle}</span></> : null}
+                        {t('common.student_dashboard.subjects_list.flagged', {
+                          defaultValue: 'Flagged {{count}}x',
+                          count: r.timesFlagged,
+                        })}
+                        {r.chapterTitle ? (
+                          <>
+                            {' '}
+                            {t('common.student_dashboard.subjects_list.in', 'in')}{' '}
+                            <span className="font-semibold">{r.chapterTitle}</span>
+                          </>
+                        ) : null}
                       </p>
                     )}
                   />
@@ -315,10 +363,12 @@ export function SubjectsProgressList({ subjects }: SubjectsProgressListProps) {
 
               <div className="mt-3 pt-3 border-t border-neutral-200/70 dark:border-neutral-800 flex items-center justify-between text-[10px] font-bold text-neutral-400">
                 <span className="flex items-center gap-1">
-                  <Target size={12} /> Subject mastery tracking
+                  <Target size={12} />{' '}
+                  {t('common.student_dashboard.subjects_list.mastery_tracking', 'Subject mastery tracking')}
                 </span>
                 <button onClick={() => openChapter()} className="flex items-center gap-1 hover:text-primary transition-colors">
-                  Open subject <ChevronRight size={12} />
+                  {t('common.student_dashboard.subjects_list.open_subject', 'Open subject')}{' '}
+                  <ChevronRight size={12} />
                 </button>
               </div>
             </div>

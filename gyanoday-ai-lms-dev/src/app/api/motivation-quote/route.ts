@@ -13,8 +13,30 @@ const FALLBACK_QUOTES = [
   'A challenging chapter is not a barrier—it is another chance to grow. 🌱',
 ]
 
+const FALLBACK_QUOTES_HI = [
+  'हर दिन की छोटी प्रगति एक दिन बड़ी सफलता बन जाती है। चलते रहो। 🌱',
+  'आज परफ़ेक्ट होना ज़रूरी नहीं, बस सीखते रहना ज़रूरी है। ✨',
+  'आज जो कठिन विषय समझ लोगे, कल वही आसान लगेगा। सीखते रहो। 💪',
+  'खुद पर भरोसा रखो, एक-एक कदम ध्यान से बढ़ाओ। 🚀',
+  'आज की मेहनत ही कल का आत्मविश्वास बनेगी। 🌟',
+  'जिज्ञासु रहो, नियमित रहो, और अपनी प्रगति को बोलने दो। 📚',
+  'कठिन अध्याय रुकावट नहीं, आगे बढ़ने का एक और मौका है। 🌱',
+]
+const FALLBACK_QUOTES_GU = [
+  'દરરોજની નાની પ્રગતિ એક દિવસ મોટી સફળતા બની જાય છે. આગળ વધતા રહો. 🌱',
+  'આજે પરફેક્ટ હોવું જરૂરી નથી, બસ શીખતા રહેવું જરૂરી છે. ✨',
+  'આજે જે અઘરો વિષય સમજશો, કાલે તે સહેલો લાગશે. શીખતા રહો. 💪',
+  'પોતાના પર વિશ્વાસ રાખો, એક એક પગલું ધ્યાનથી ભરો. 🚀',
+  'આજની મહેનત જ કાલનો આત્મવિશ્વાસ બનશે. 🌟',
+  'જિજ્ઞાસુ રહો, નિયમિત રહો અને તમારી પ્રગતિને બોલવા દો. 📚',
+  'અઘરો પાઠ અવરોધ નથી, આગળ વધવાની બીજી તક છે. 🌱',
+]
+const LANGUAGE_NAMES: Record<string, string> = { en: 'English', hi: 'Hindi (Devanagari script)', gu: 'Gujarati' }
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
+  const langParam = (searchParams.get('lang') || 'en').split('-')[0]
+  const lang = langParam in LANGUAGE_NAMES ? langParam : 'en'
   // Only today (±1 day for time zones) is accepted. Arbitrary dates used to bypass the
   // cache and trigger a paid AI call each time; an invalid date also produced `undefined`.
   const today = new Date()
@@ -33,9 +55,9 @@ export async function GET(request: Request) {
     const response = await openai.responses.create({
       model: 'gpt-4o-mini',
       temperature: 0.9,
-      max_output_tokens: 80,
+      max_output_tokens: 160,
       instructions: 'You are Siksha Inspire, a warm and concise academic motivation assistant for school students.',
-      input: `Generate ONE original motivational quote for a student for ${date}. Make it encouraging, practical, and focused on learning, consistency, curiosity, effort, or overcoming challenges. It must be 1 or 2 short lines, maximum 22 words total. Do not use the student's name. Do not add a title, explanation, quotation marks, author name, or hashtags. Return only the quote.`,
+      input: `Generate ONE original motivational quote for a student for ${date}. Make it encouraging, practical, and focused on learning, consistency, curiosity, effort, or overcoming challenges. It must be 1 or 2 short lines, maximum 22 words total. Do not use the student's name. Do not add a title, explanation, quotation marks, author name, or hashtags. Return only the quote. Write the quote entirely in ${LANGUAGE_NAMES[lang]}.`,
     })
 
     const quote = response.output_text?.trim()
@@ -48,7 +70,9 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error('[MotivationQuote] Failed to generate quote:', error)
     return NextResponse.json({
-      quote: FALLBACK_QUOTES[dayNumber % FALLBACK_QUOTES.length],
+      quote: (lang === 'hi' ? FALLBACK_QUOTES_HI : lang === 'gu' ? FALLBACK_QUOTES_GU : FALLBACK_QUOTES)[
+        dayNumber % FALLBACK_QUOTES.length
+      ],
       date,
       fallback: true,
     })

@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslation } from 'react-i18next'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
 
@@ -20,6 +21,7 @@ interface PDFViewerProps {
 }
 
 export function PDFViewer({ chapter, themeColor, hasChapters = true }: PDFViewerProps) {
+  const { t } = useTranslation()
   const [isLoading, setIsLoading] = useState(true)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [zoom, setZoom] = useState(100)
@@ -154,12 +156,14 @@ export function PDFViewer({ chapter, themeColor, hasChapters = true }: PDFViewer
           <BookOpen size={48} />
         </div>
         <h3 className="text-2xl font-bold text-neutral-800 dark:text-neutral-100 mb-2 transition-colors duration-300">
-          {hasChapters ? 'Select a Chapter' : 'No chapters uploaded'}
+          {hasChapters
+            ? t('common.ui.select_chapter', 'Select a Chapter')
+            : t('common.ui.no_chapters', 'No chapters uploaded')}
         </h3>
         <p className="text-neutral-500 dark:text-neutral-400 max-w-xs transition-colors duration-300">
           {hasChapters
-            ? 'Choose a chapter from the list on the left to start learning.'
-            : 'Chapters are not available yet. Please check back later.'}
+            ? t('common.ui.choose_chapter', 'Choose a chapter from the list on the left to start learning.')
+            : t('common.ui.chapters_unavailable', 'Chapters are not available yet. Please check back later.')}
         </p>
       </div>
     )
@@ -195,7 +199,7 @@ export function PDFViewer({ chapter, themeColor, hasChapters = true }: PDFViewer
             <button
               onClick={handleZoomOut}
               className="p-1.5 md:p-2 hover:bg-white dark:hover:bg-neutral-700 rounded-lg text-neutral-500 transition-all active:scale-90"
-              title="Zoom Out"
+              title={t('common.ui.zoom_out', 'Zoom Out')}
               disabled={zoom <= 50}
             >
               <ZoomOut size={18} />
@@ -206,7 +210,7 @@ export function PDFViewer({ chapter, themeColor, hasChapters = true }: PDFViewer
             <button
               onClick={handleZoomIn}
               className="p-1.5 md:p-2 hover:bg-white dark:hover:bg-neutral-700 rounded-lg text-neutral-500 transition-all active:scale-90"
-              title="Zoom In"
+              title={t('common.ui.zoom_in', 'Zoom In')}
               disabled={zoom >= 300}
             >
               <ZoomIn size={18} />
@@ -215,7 +219,7 @@ export function PDFViewer({ chapter, themeColor, hasChapters = true }: PDFViewer
             <button
               onClick={handleResetZoom}
               className="p-1.5 md:p-2 hover:bg-white dark:hover:bg-neutral-700 rounded-lg text-neutral-500 transition-all active:scale-90"
-              title="Reset Zoom"
+              title={t('common.ui.reset_zoom', 'Reset Zoom')}
             >
               <RotateCcw size={16} />
             </button>
@@ -224,7 +228,7 @@ export function PDFViewer({ chapter, themeColor, hasChapters = true }: PDFViewer
           <button
             onClick={() => setIsFullscreen(!isFullscreen)}
             className="p-2.5 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-xl text-neutral-500 transition-colors"
-            title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+            title={isFullscreen ? t('common.ui.exit_fullscreen', 'Exit Fullscreen') : t('common.ui.fullscreen', 'Fullscreen')}
           >
             {isFullscreen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
           </button>

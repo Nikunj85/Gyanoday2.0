@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { BookOpen, FileText, Loader2, Sparkles, X, Brain } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { generateAndSaveSmartNotes } from '@/app/actions/smart-notes-actions'
 import { getRecommendedTopics } from '@/app/actions/concept-actions'
@@ -13,6 +14,8 @@ import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/use-toast'
 import { MotionContainer, MotionWrapper } from '@/lib/animations/MotionWrapper'
 import { getFriendlyErrorMessage } from '@/lib/utils/error-messages'
+import { getEquivalentClassIds } from '@/lib/class-utils'
+import { createClient } from '@/lib/supabase/client'
 import { chapterService } from '@/services/chapter-service'
 import { quizService } from '@/services/quiz-service'
 import { quizAttemptsService } from '@/services/quiz-attempts-service'
@@ -29,6 +32,7 @@ import { SubjectHeader } from '../../components/SubjectHeader'
 import { SmartSummaryDialog } from '../../components/SmartSummaryDialog'
 
 export default function SubjectDetailPage() {
+  const { t } = useTranslation()
   const { subjectId } = useParams() as { subjectId: string }
   const router = useRouter()
   const { user } = useUserStore()
@@ -54,17 +58,28 @@ export default function SubjectDetailPage() {
     queryFn: () => subjectService.getById(subjectId),
   })
 
+  // "My class" = every same-named class row (Class 10 exists once per medium).
+  const { data: classIds } = useQuery({
+    queryKey: ['equivalent-class-ids', user?.class_id],
+    queryFn: () => getEquivalentClassIds(createClient(), user?.class_id),
+    enabled: !!user?.class_id,
+    staleTime: 10 * 60 * 1000,
+  })
+
   // Fetch Chapters
   const { data: chaptersData, isLoading: isChaptersLoading } = useQuery({
-    queryKey: ['chapters', subjectId, user?.class_id],
+    queryKey: ['chapters', subjectId, user?.class_id, classIds, user?.language],
     queryFn: () =>
       chapterService.getChapters({
         subjectId,
         classId: user?.class_id || null,
+        classIds: classIds || null,
         pageSize: 1000,
         isVisibleFilter: true,
+        // Hindi-medium students only get Hindi chapters (and so on).
+        languageFilter: user?.language || 'en',
       }),
-    enabled: !!subjectId,
+    enabled: !!subjectId && !!user && (!user.class_id || !!classIds),
   })
 
   // Fetch User Progress
@@ -157,17 +172,17 @@ export default function SubjectDetailPage() {
         title:
           toggle.scope === 'subject'
             ? toggle.markAsCompleted
-              ? 'All chapters marked as completed'
-              : 'All chapters marked as not completed'
+              ? t('common.ui.all_completed', 'All chapters marked as completed')
+              : t('common.ui.all_not_completed', 'All chapters marked as not completed')
             : toggle.markAsCompleted
-              ? 'Chapter marked as completed'
-              : 'Chapter marked as not completed',
+              ? t('common.ui.chapter_completed', 'Chapter marked as completed')
+              : t('common.ui.chapter_not_completed', 'Chapter marked as not completed'),
       })
       setPendingToggle(null)
     },
     onError: (err) => {
       toast({
-        title: "Couldn't update your progress",
+        title: t('common.ui.progress_failed', "Couldn't update your progress"),
         description: getFriendlyErrorMessage(err),
         variant: 'destructive',
       })
@@ -234,7 +249,7 @@ export default function SubjectDetailPage() {
         // forever with zero explanation. Now they get a clear,
         // non-technical reason and can retry.
         toast({
-          title: "Couldn't generate Smart Notes",
+          title: t('common.ui.notes_failed', "Couldn't generate Smart Notes"),
           description: getFriendlyErrorMessage(err),
           variant: 'destructive',
         })
@@ -373,7 +388,7 @@ export default function SubjectDetailPage() {
         isOpen={isSummaryOpen}
         onClose={() => setIsSummaryOpen(false)}
         title={activeChapter?.title || 'Chapter Summary'}
-        description={activeChapter?.description || 'No summary available for this chapter yet.'}
+        description={activeChapter?.description || t('common.ui.no_summary_yet', 'No summary available for this chapter yet.')}
         themeColor={themeColor}
         chapterPerformance={chapterPerformance}
         weakTopics={chapterWeakTopics}

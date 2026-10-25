@@ -71,7 +71,7 @@ export function StreakCard({ item }: { item: StreakDayData }) {
           {item.isToday && (
             <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
               <span className="px-2.5 py-0.5 text-[8px] sm:text-[9px] md:text-[10px] font-extrabold uppercase tracking-wider bg-white text-primary rounded-full shadow-md whitespace-nowrap">
-                Today
+                {t('common.today', 'Today')}
               </span>
             </div>
           )}
@@ -125,7 +125,7 @@ export function StreakCard({ item }: { item: StreakDayData }) {
                 'text-neutral-500 dark:text-neutral-400'
             )}
           >
-            {item.day}
+            {t(`common.days_short.${String(item.day).toLowerCase()}`, String(item.day))}
           </span>
 
           {/* "Not Joined Yet" small label for not_joined cards */}

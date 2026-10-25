@@ -3,6 +3,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2, X } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useForm } from 'react-hook-form'
 import * as z from 'zod'
 
@@ -36,6 +37,7 @@ interface EditProfileDialogProps {
 }
 
 export function EditProfileDialog({ isOpen, onClose }: EditProfileDialogProps) {
+  const { t } = useTranslation()
   const { user, refreshProfile } = useUserStore()
   const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
@@ -48,7 +50,7 @@ export function EditProfileDialog({ isOpen, onClose }: EditProfileDialogProps) {
       email: user?.email || '',
       school_name: user?.school_name || '',
       class: user?.class?.name || '',
-      language: user?.language || 'English',
+      language: user?.language || 'en',
     },
   })
 
@@ -68,14 +70,14 @@ export function EditProfileDialog({ isOpen, onClose }: EditProfileDialogProps) {
 
       await refreshProfile()
       toast({
-        title: 'Profile updated',
-        description: 'Your profile has been updated successfully.',
+        title: t('common.profile_page.messages.profile_updated', 'Profile updated'),
+        description: t('common.profile_page.messages.profile_updated_desc', 'Your profile has been updated successfully.'),
       })
       onClose()
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to update profile',
+        title: t('common.ui.error', 'Error'),
+        description: error.message || t('common.profile_page.messages.update_failed', 'Failed to update profile'),
         variant: 'destructive',
       })
     } finally {
@@ -89,7 +91,7 @@ export function EditProfileDialog({ isOpen, onClose }: EditProfileDialogProps) {
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-300">
       <div className="bg-white w-full max-w-lg rounded-[30px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
         <div className="bg-primary p-6 flex justify-between items-center text-white">
-          <h2 className="text-2xl font-black">Edit Profile</h2>
+          <h2 className="text-2xl font-black">{t('common.profile_page.edit_profile', 'Edit Profile')}</h2>
           <button
             onClick={onClose}
             className="hover:bg-white/20 p-2 rounded-full transition-colors"
@@ -106,9 +108,16 @@ export function EditProfileDialog({ isOpen, onClose }: EditProfileDialogProps) {
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-[#6B3A8E] font-bold">User Name</FormLabel>
+                    <FormLabel className="text-[#6B3A8E] font-bold">{t('common.profile_page.user_name', 'User Name')}</FormLabel>
                     <FormControl>
-                      <Input {...field} className="rounded-xl border-2 focus:border-primary" />
+                      <select
+                        {...field}
+                        className="h-10 w-full rounded-xl border-2 bg-white px-3 text-sm focus:border-primary focus:outline-none"
+                      >
+                        <option value="en">English</option>
+                        <option value="hi">हिंदी</option>
+                        <option value="gu">ગુજરાતી</option>
+                      </select>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -137,9 +146,16 @@ export function EditProfileDialog({ isOpen, onClose }: EditProfileDialogProps) {
                   name="school_name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-[#6B3A8E] font-bold">School Name</FormLabel>
+                      <FormLabel className="text-[#6B3A8E] font-bold">{t('common.profile_page.school_name', 'School Name')}</FormLabel>
                       <FormControl>
-                        <Input {...field} className="rounded-xl border-2 focus:border-primary" />
+                        <select
+                        {...field}
+                        className="h-10 w-full rounded-xl border-2 bg-white px-3 text-sm focus:border-primary focus:outline-none"
+                      >
+                        <option value="en">English</option>
+                        <option value="hi">हिंदी</option>
+                        <option value="gu">ગુજરાતી</option>
+                      </select>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -168,9 +184,16 @@ export function EditProfileDialog({ isOpen, onClose }: EditProfileDialogProps) {
                 name="language"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-[#6B3A8E] font-bold">Language</FormLabel>
+                    <FormLabel className="text-[#6B3A8E] font-bold">{t('common.auth.form.medium', 'Language')}</FormLabel>
                     <FormControl>
-                      <Input {...field} className="rounded-xl border-2 focus:border-primary" />
+                      <select
+                        {...field}
+                        className="h-10 w-full rounded-xl border-2 bg-white px-3 text-sm focus:border-primary focus:outline-none"
+                      >
+                        <option value="en">English</option>
+                        <option value="hi">हिंदी</option>
+                        <option value="gu">ગુજરાતી</option>
+                      </select>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -184,7 +207,7 @@ export function EditProfileDialog({ isOpen, onClose }: EditProfileDialogProps) {
                   onClick={onClose}
                   className="rounded-xl border-2 font-bold"
                 >
-                  Cancel
+                  {t('common.cancel', 'Cancel')}
                 </Button>
                 <Button
                   type="submit"
@@ -192,7 +215,7 @@ export function EditProfileDialog({ isOpen, onClose }: EditProfileDialogProps) {
                   className="bg-primary hover:bg-primary/90 text-white rounded-xl font-bold px-8"
                 >
                   {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                  Save Changes
+                  {t('common.profile_page.save_changes', 'Save Changes')}
                 </Button>
               </div>
             </form>

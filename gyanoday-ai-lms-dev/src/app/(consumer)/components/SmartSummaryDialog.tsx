@@ -62,7 +62,7 @@ export function SmartSummaryDialog({
   const hasAttempts = performance.attempts > 0
 
   const strengthMessage = !hasAttempts
-    ? 'Take a chapter quiz to unlock your personalized strengths and weaknesses.'
+    ? t('common.ui.summary_take_quiz', 'Take a chapter quiz to unlock your personalized strengths and weaknesses.')
     : performance.averagePct >= 80
       ? `You are showing strong understanding of this chapter, with an average quiz performance of ${performance.averagePct}%.`
       : performance.averagePct >= 60
@@ -72,7 +72,7 @@ export function SmartSummaryDialog({
   const weaknesses = weakTopics.length
     ? weakTopics
     : hasAttempts && performance.averagePct < 75
-      ? [{ topic: 'Core chapter concepts', timesFlagged: 1 }]
+      ? [{ topic: t('common.ui.core_concepts', 'Core chapter concepts'), timesFlagged: 1 }]
       : []
 
   return (
@@ -94,7 +94,7 @@ export function SmartSummaryDialog({
             />
             <button
               onClick={onClose}
-              aria-label="Close smart summary"
+              aria-label={t('common.ui.close', 'Close')}
               className="absolute top-5 right-5 p-2 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors z-20"
             >
               <X size={22} className="text-neutral-400" />
@@ -114,7 +114,7 @@ export function SmartSummaryDialog({
                   </span>
                 </div>
                 <h2 className="text-xl md:text-2xl font-black text-neutral-900 dark:text-white tracking-tight leading-tight">
-                  {title || 'Chapter Summary'}
+                  {title || t('common.ui.chapter_summary', 'Chapter Summary')}
                 </h2>
               </div>
 
@@ -170,13 +170,13 @@ export function SmartSummaryDialog({
                   <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr_1fr] gap-3 items-stretch">
                     <ScoreRing value={performance.averagePct} themeColor={themeColor} hasAttempts={hasAttempts} />
                     <InsightMetric
-                      label="Best score"
+                      label={t('common.ui.best_score', 'Best score')}
                       value={`${performance.bestPct}%`}
                       icon={<Trophy size={16} />}
                       themeColor={themeColor}
                     />
                     <InsightMetric
-                      label="Attempts"
+                      label={t('common.student_dashboard.subjects_list.attempts', 'Attempts')}
                       value={`${performance.attempts}`}
                       icon={<Repeat size={16} />}
                       themeColor={themeColor}
@@ -187,7 +187,7 @@ export function SmartSummaryDialog({
                     <section className="rounded-2xl border border-emerald-100 bg-emerald-50/70 dark:border-emerald-900/40 dark:bg-emerald-950/20 p-5">
                       <div className="flex items-center gap-2 mb-3">
                         <CheckCircle2 size={19} className="text-emerald-600" />
-                        <h3 className="text-base font-black text-emerald-800 dark:text-emerald-300">Strengths</h3>
+                        <h3 className="text-base font-black text-emerald-800 dark:text-emerald-300">{t('common.ui.strengths', 'Strengths')}</h3>
                       </div>
                       <p className="text-sm md:text-base leading-relaxed font-medium text-emerald-900/80 dark:text-emerald-200/80">
                         {strengthMessage}
@@ -213,7 +213,7 @@ export function SmartSummaryDialog({
                     <section className="rounded-2xl border border-rose-100 bg-rose-50/70 dark:border-rose-900/40 dark:bg-rose-950/20 p-5">
                       <div className="flex items-center gap-2 mb-3">
                         <TrendingDown size={19} className="text-rose-600" />
-                        <h3 className="text-base font-black text-rose-800 dark:text-rose-300">Weaknesses</h3>
+                        <h3 className="text-base font-black text-rose-800 dark:text-rose-300">{t('common.ui.weaknesses', 'Weaknesses')}</h3>
                       </div>
                       {weaknesses.length ? (
                         <div className="flex flex-wrap gap-2">
@@ -265,6 +265,7 @@ function ScoreRing({
   themeColor?: string
   hasAttempts: boolean
 }) {
+  const { t } = useTranslation()
   const radius = 30
   const circumference = 2 * Math.PI * radius
   const progress = hasAttempts ? Math.min(Math.max(value, 0), 100) : 0
@@ -302,7 +303,7 @@ function ScoreRing({
           </span>
         </div>
       </div>
-      <p className="text-xs font-bold uppercase tracking-wider text-neutral-400 sm:text-center">Average</p>
+      <p className="text-xs font-bold uppercase tracking-wider text-neutral-400 sm:text-center">{t('common.ui.average', 'Average')}</p>
     </div>
   )
 }

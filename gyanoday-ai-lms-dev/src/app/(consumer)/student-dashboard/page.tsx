@@ -24,7 +24,8 @@ export default function StudentDashboard() {
     queryKey: ['student-subjects', user?.language, user?.class_id],
     queryFn: () =>
       subjectService.getSubjects({
-        languageFilter: user?.language || 'en',
+        // Subjects are shared across mediums — filter by the *chapters'* language.
+        chapterLanguage: user?.language || 'en',
         classFilter: user?.class_id, // Add class filter
         statusFilter: true,
         pageSize: 100,
@@ -35,11 +36,11 @@ export default function StudentDashboard() {
 
   // Fetch Progress
   const { data: progressData, isLoading: isLoadingProgress } = useQuery({
-    queryKey: ['student-progress', user?.id, user?.class_id, subjectsData?.data],
+    queryKey: ['student-progress', user?.id, user?.class_id, user?.language, subjectsData?.data],
     queryFn: async () => {
       if (!user?.id || !subjectsData?.data || !user?.class_id) return {}
       const subjectIds = subjectsData.data.map((s) => s.id)
-      return await chapterService.getSubjectProgress(user.id, subjectIds, user.class_id)
+      return await chapterService.getSubjectProgress(user.id, subjectIds, user.class_id, user.language || 'en')
     },
     enabled: !!user?.id && !!subjectsData?.data?.length && !!user?.class_id,
   })

@@ -5,11 +5,12 @@ import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, Eye, EyeOff, Loader2, UserPlus } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import * as z from 'zod'
 
+import { checkUserExists } from '@/app/actions/auth-actions'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
@@ -23,35 +24,39 @@ import RegisterSkeleton from '../components/RegisterSkeleton'
 const registerSchema = z.object({
   name: z
     .string()
-    .min(2, 'Name must be at least 2 characters')
-    .regex(/^[a-zA-Z\s.-]+$/, 'Name can only contain alphabets, spaces, dots and hyphens'),
-  email: z.string().email('Invalid email address'),
-  phone: z.string().regex(/^[6-9]\d{9}$/, 'Please enter a valid 10-digit Indian mobile number'),
+    .min(2, 'common.auth.errors.name_min')
+    .regex(/^[a-zA-Z\s.-]+$/, 'common.auth.errors.name_chars'),
+  email: z.string().email('common.auth.errors.email_invalid'),
+  phone: z.string().regex(/^[6-9]\d{9}$/, 'common.auth.errors.phone_invalid'),
   password: z
     .string()
-    .min(8, 'Password must be at least 8 characters')
-    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
-    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
-    .regex(/[0-9]/, 'Password must contain at least one number')
-    .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character')
+    .min(8, 'common.auth.errors.pw_min')
+    .regex(/[A-Z]/, 'common.auth.errors.pw_upper')
+    .regex(/[a-z]/, 'common.auth.errors.pw_lower')
+    .regex(/[0-9]/, 'common.auth.errors.pw_number')
+    .regex(/[^A-Za-z0-9]/, 'common.auth.errors.pw_special')
     .optional()
     .or(z.literal('')),
-  school_name: z.string().min(2, 'School name is required').max(100, 'School name is too long'),
-  class_id: z.string().min(1, 'Please select your class'),
+  school_name: z.string().min(2, 'common.auth.errors.school_required').max(100, 'common.auth.errors.school_long'),
+  class_id: z.string().min(1, 'common.auth.errors.class_required'),
   language: z.nativeEnum(Language),
 })
 
 type RegisterFormValues = z.infer<typeof registerSchema>
 
 export default function RegisterPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [error, setError] = useState<string | null>(null)
+  // Validation messages are i18n keys; translate at render so they follow the chosen medium.
+  const tr = (m?: string) => (m ? t(m, { defaultValue: m }) : '')
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [checkingSession, setCheckingSession] = useState(true)
   const [isGoogleUser, setIsGoogleUser] = useState(false)
+  // true when the visitor tried an email/phone that already has an account -> offer a Log in link
+  const [accountExists, setAccountExists] = useState(false)
   const supabase = createClient()
   const setUser = useUserStore((state) => state.setUser)
   const user = useUserStore((state) => state.user)
@@ -61,6 +66,8 @@ export default function RegisterPage() {
     handleSubmit,
     setValue,
     watch,
+    setError: setFieldError,
+    clearErrors,
     formState: { errors },
   } = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -70,6 +77,19 @@ export default function RegisterPage() {
   })
 
   const selectedLanguage = watch('language')
+
+  // Choosing the medium of instruction switches the page language right away, and the
+  // class list is per-medium (Class 10 exists once for each), so clear any earlier pick.
+  const previousMedium = useRef(selectedLanguage)
+  useEffect(() => {
+    if (selectedLanguage && (i18n.language || '').split('-')[0] !== selectedLanguage) {
+      i18n.changeLanguage(selectedLanguage)
+    }
+    if (previousMedium.current !== selectedLanguage) {
+      previousMedium.current = selectedLanguage
+      setValue('class_id', '')
+    }
+  }, [selectedLanguage, i18n, setValue])
 
   const { data: classesData, isLoading: isLoadingClasses } = useQuery({
     queryKey: ['classes-list', selectedLanguage],
@@ -118,32 +138,58 @@ export default function RegisterPage() {
     checkSession()
   }, [router, supabase, setValue])
 
+  const EMAIL_EXISTS_MSG = 'common.auth.errors.email_exists'
+  const PHONE_EXISTS_MSG = 'common.auth.errors.phone_exists'
+
+  // Live feedback as soon as the visitor leaves the email / phone field.
+  const checkFieldOnBlur = async (field: 'email' | 'phone', rawValue: string) => {
+    if (isGoogleUser) return
+    const value = rawValue.trim()
+    const valid =
+      field === 'email'
+        ? z.string().email().safeParse(value).success
+        : /^[6-9]\d{9}$/.test(value)
+    if (!valid) return
+
+    try {
+      const result = await checkUserExists(field === 'email' ? { email: value } : { phone: value })
+      const exists = field === 'email' ? result.emailExists : result.phoneExists
+      if (exists) {
+        setFieldError(field, {
+          type: 'manual',
+          message: field === 'email' ? EMAIL_EXISTS_MSG : PHONE_EXISTS_MSG,
+        })
+        setAccountExists(true)
+      }
+    } catch {
+      // Silent: the same check runs again on submit and reports real errors there.
+    }
+  }
+
   const onSubmit = async (data: RegisterFormValues) => {
     setError(null)
+    setAccountExists(false)
     setIsLoading(true)
+
+    // Supabase Auth stores emails lower-cased; compare and sign up with the same form.
+    data = { ...data, email: data.email.trim().toLowerCase() }
 
     let authUserId: string | undefined
     let authSession: any = null
 
     try {
-      // 1. Check if email or phone already exists in users table
+      // 1. Check (server-side, case-insensitive) whether this email or phone already has an account
       if (!isGoogleUser) {
-        const { data: existingUser, error: checkError } = await supabase
-          .from('users')
-          .select('email, phone')
-          .or(`email.eq.${data.email},phone.eq.${data.phone}`)
-          .maybeSingle()
+        const { emailExists, phoneExists } = await checkUserExists({
+          email: data.email,
+          phone: data.phone,
+        })
 
-        if (checkError) {
-          throw new Error('Error checking existing users')
-        }
-
-        if (existingUser) {
-          if (existingUser.email === data.email) {
-            setError('A user with this email already exists.')
-          } else {
-            setError('A user with this phone number already exists.')
-          }
+        if (emailExists || phoneExists) {
+          if (emailExists) setFieldError('email', { type: 'manual', message: EMAIL_EXISTS_MSG })
+          if (phoneExists) setFieldError('phone', { type: 'manual', message: PHONE_EXISTS_MSG })
+          setError(emailExists ? EMAIL_EXISTS_MSG : PHONE_EXISTS_MSG)
+          setAccountExists(true)
           setIsLoading(false)
           return
         }
@@ -163,7 +209,25 @@ export default function RegisterPage() {
         })
 
         if (authError) {
-          setError(authError.message)
+          if (/already|registered|exists/i.test(authError.message)) {
+            setFieldError('email', { type: 'manual', message: EMAIL_EXISTS_MSG })
+            setError(EMAIL_EXISTS_MSG)
+            setAccountExists(true)
+          } else {
+            setError(authError.message)
+          }
+          setIsLoading(false)
+          return
+        }
+
+        // With email confirmation on, Supabase does NOT return an error for an email that is
+        // already registered (to avoid revealing which emails exist). It returns a fake user
+        // with an empty `identities` list instead. Without this check the page used to say
+        // "Registration successful!" for an existing account.
+        if (authData.user && Array.isArray(authData.user.identities) && authData.user.identities.length === 0) {
+          setFieldError('email', { type: 'manual', message: EMAIL_EXISTS_MSG })
+          setError(EMAIL_EXISTS_MSG)
+          setAccountExists(true)
           setIsLoading(false)
           return
         }
@@ -175,7 +239,7 @@ export default function RegisterPage() {
           data: { session },
         } = await supabase.auth.getSession()
         if (!session) {
-          setError('Session expired. Please try again.')
+          setError(t('common.auth.errors.session_expired', 'Session expired. Please try again.'))
           setIsLoading(false)
           return
         }
@@ -201,7 +265,7 @@ export default function RegisterPage() {
 
         if (userError) {
           console.error('Error inserting user profile:', userError)
-          setError('Registration failed: Could not save profile data. ' + userError.message)
+          setError(t('common.auth.errors.save_failed', 'Registration failed: Could not save profile data.') + ' ' + userError.message)
           setIsLoading(false)
           return
         }
@@ -236,15 +300,17 @@ export default function RegisterPage() {
           const next = searchParams.get('next')
           const redirectPath = next || '/dashboard'
           router.push(
-            `${redirectPath}${redirectPath.includes('?') ? '&' : '?'}message=Registration successful! Welcome to Gyanoday AI.`
+            `${redirectPath}${redirectPath.includes('?') ? '&' : '?'}message=${encodeURIComponent(t('common.auth.errors.welcome', 'Registration successful! Welcome to Gyanoday AI.'))}`
           )
         } else {
           // Email confirmation is enabled for email/password signup
           const next = searchParams.get('next')
           const message =
-            'Registration successful! A confirmation email has been sent to ' +
-            data.email +
-            '. Please confirm your email before logging in.'
+            t('common.auth.errors.confirm_email', {
+              defaultValue:
+                'Registration successful! A confirmation email has been sent to {{email}}. Please confirm your email before logging in.',
+              email: data.email,
+            })
           const loginUrl = new URL('/login', window.location.origin)
           loginUrl.searchParams.set('message', message)
           if (next) loginUrl.searchParams.set('next', next)
@@ -252,7 +318,7 @@ export default function RegisterPage() {
         }
       }
     } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred.')
+      setError(err.message || t('common.auth.login.unexpected_error', 'An unexpected error occurred.'))
       setIsLoading(false)
     }
   }
@@ -265,7 +331,7 @@ export default function RegisterPage() {
       await authService.signInWithGoogle(`${window.location.origin}/auth/callback?next=/register`)
     } catch (err: any) {
       console.error('Google Sign-Up Error:', err)
-      setError(err.message || 'Failed to sign up with Google')
+      setError(err.message || t('common.auth.login.google_failed', 'Failed to sign up with Google'))
       setIsLoading(false)
     }
   }
@@ -304,7 +370,15 @@ export default function RegisterPage() {
                     {t('common.auth.form.email')}
                   </label>
                   <input
-                    {...register('email')}
+                    {...register('email', {
+                      onChange: () => {
+                        if (errors.email?.type === 'manual') {
+                          clearErrors('email')
+                          setAccountExists(false)
+                        }
+                      },
+                      onBlur: (e) => checkFieldOnBlur('email', e.target.value),
+                    })}
                     type="email"
                     placeholder={t('common.auth.form.email_placeholder')}
                     disabled={isGoogleUser}
@@ -315,7 +389,7 @@ export default function RegisterPage() {
                   />
                   {errors.email && (
                     <p className="mt-1.5 text-xs font-medium text-red-500">
-                      {errors.email.message}
+                      {tr(errors.email.message)}
                     </p>
                   )}
                 </div>
@@ -347,7 +421,7 @@ export default function RegisterPage() {
                     </div>
                     {errors.password && (
                       <p className="mt-1.5 text-xs font-medium text-red-500">
-                        {errors.password.message}
+                        {tr(errors.password.message)}
                       </p>
                     )}
                   </div>
@@ -368,7 +442,7 @@ export default function RegisterPage() {
                     )}
                   />
                   {errors.name && (
-                    <p className="mt-1.5 text-xs font-medium text-red-500">{errors.name.message}</p>
+                    <p className="mt-1.5 text-xs font-medium text-red-500">{tr(errors.name.message)}</p>
                   )}
                 </div>
 
@@ -386,7 +460,9 @@ export default function RegisterPage() {
                         onChange: (e) => {
                           const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 10)
                           e.target.value = val
+                          if (errors.phone?.type === 'manual') clearErrors('phone')
                         },
+                        onBlur: (e) => checkFieldOnBlur('phone', e.target.value),
                       })}
                       type="tel"
                       placeholder={t('common.auth.form.phone_placeholder')}
@@ -399,7 +475,7 @@ export default function RegisterPage() {
                   </div>
                   {errors.phone && (
                     <p className="mt-1.5 text-xs font-medium text-red-500">
-                      {errors.phone.message}
+                      {tr(errors.phone.message)}
                     </p>
                   )}
                 </div>
@@ -418,9 +494,10 @@ export default function RegisterPage() {
                           'border-red-500 focus:border-red-500 focus:ring-red-500/5'
                       )}
                     >
-                      <option value={Language.EN}>{t('common.languages.en')}</option>
-                      <option value={Language.HI}>{t('common.languages.hi')}</option>
-                      <option value={Language.GU}>{t('common.languages.gu')}</option>
+                      {/* Always shown in their own script so a student can find their medium. */}
+                      <option value={Language.EN}>English</option>
+                      <option value={Language.HI}>हिंदी</option>
+                      <option value={Language.GU}>ગુજરાતી</option>
                     </select>
                     <ChevronDown
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none"
@@ -429,7 +506,7 @@ export default function RegisterPage() {
                   </div>
                   {errors.language && (
                     <p className="mt-1.5 text-xs font-medium text-red-500">
-                      {errors.language.message}
+                      {tr(errors.language.message)}
                     </p>
                   )}
                 </div>
@@ -463,7 +540,7 @@ export default function RegisterPage() {
                   </div>
                   {errors.class_id && (
                     <p className="mt-1.5 text-xs font-medium text-red-500">
-                      {errors.class_id.message}
+                      {tr(errors.class_id.message)}
                     </p>
                   )}
                 </div>
@@ -485,15 +562,23 @@ export default function RegisterPage() {
                   />
                   {errors.school_name && (
                     <p className="mt-1.5 text-xs font-medium text-red-500">
-                      {errors.school_name.message}
+                      {tr(errors.school_name.message)}
                     </p>
                   )}
                 </div>
               </div>
 
               {error && (
-                <div className="rounded-lg bg-red-50 p-3 text-sm font-medium text-red-600 dark:bg-red-900/20 dark:text-red-400">
-                  {error}
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-red-50 p-3 text-sm font-medium text-red-600 dark:bg-red-900/20 dark:text-red-400">
+                  <span>{tr(error || undefined)}</span>
+                  {accountExists && (
+                    <Link
+                      href={`/login${searchParams.get('next') ? `?next=${encodeURIComponent(searchParams.get('next') as string)}` : ''}`}
+                      className="shrink-0 rounded-md bg-red-600 px-3 py-1 text-xs font-bold text-white hover:bg-red-700"
+                    >
+                      {t('common.auth.login.submit')}
+                    </Link>
+                  )}
                 </div>
               )}
 

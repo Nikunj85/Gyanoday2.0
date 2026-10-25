@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslation } from 'react-i18next'
 import { CheckCircle2, XCircle } from 'lucide-react'
 
 import MarkdownRenderer from '@/components/common/MarkdownRenderer'
@@ -26,14 +27,17 @@ interface ReviewAnswerDrawerProps {
  * just seeing a score.
  */
 export function ReviewAnswerDrawer({ open, onOpenChange, questions }: ReviewAnswerDrawerProps) {
+  const { t } = useTranslation()
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>Review Answers</SheetTitle>
+          <SheetTitle>{t('common.quiz_result.buttons.review', 'Review Answers')}</SheetTitle>
           <SheetDescription>
-            {questions.length} question{questions.length !== 1 ? 's' : ''} — see what you got
-            right and what to revisit.
+            {t('common.ui.review_subtitle', {
+              defaultValue: '{{count}} questions — see what you got right and what to revisit.',
+              count: questions.length,
+            })}
           </SheetDescription>
         </SheetHeader>
 
@@ -62,7 +66,7 @@ export function ReviewAnswerDrawer({ open, onOpenChange, questions }: ReviewAnsw
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-neutral-400 mb-1">
-                      Question {idx + 1}
+                      {t('common.quiz.question', 'Question')} {idx + 1}
                     </p>
                     <MarkdownRenderer content={q.text} className="text-sm font-medium" />
                   </div>
@@ -86,7 +90,7 @@ export function ReviewAnswerDrawer({ open, onOpenChange, questions }: ReviewAnsw
                         <span className="flex-1">{opt.text}</span>
                         {isStudentPick && (
                           <span className="text-[10px] uppercase font-bold text-neutral-400">
-                            Your pick
+                            {t('common.ui.your_pick', 'Your pick')}
                           </span>
                         )}
                         {isRightAnswer && (

@@ -89,7 +89,7 @@ export function WeeklyStreak({ data, rules, isLoading }: WeeklyStreakProps) {
           <button
             onClick={() => setIsModalOpen(true)}
             className="p-1 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-neutral-400 cursor-pointer"
-            title="Streak Info"
+            title={t('common.ui.streak_info', 'Streak Info')}
           >
             <Info size={16} />
           </button>
@@ -115,7 +115,7 @@ export function WeeklyStreak({ data, rules, isLoading }: WeeklyStreakProps) {
                 ?.scrollIntoView({ behavior: 'smooth' })
             }}
             className="group flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-philosophy dark:text-lavender-mist bg-philosophy/5 hover:bg-philosophy/10 dark:bg-lavender-mist/10 dark:hover:bg-lavender-mist/20 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full transition-all active:scale-95"
-            title="Scroll to Siksha Inspire"
+            title={t('common.student_dashboard.view_ai_summary', 'Siksha Inspire')}
           >
             <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover:rotate-12 transition-transform" />
             <span className="hidden sm:inline">

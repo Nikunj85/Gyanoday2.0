@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client'
+import { chapterLanguageFilter, getEquivalentClassIds } from '@/lib/class-utils'
 import { Subject } from '@/types/subjects'
 
 const supabase = createClient()
@@ -12,6 +13,10 @@ export const subjectService = {
     languageFilter = 'all' as string,
     classFilter = null as string | null,
     isAdmin = false as boolean, // Add admin flag
+    // Student side: subjects are shared between mediums, so instead of matching
+    // subjects.language we keep only subjects that actually have chapters in the
+    // student's medium (e.g. 'hi' → only subjects with Hindi chapters).
+    chapterLanguage = null as string | null,
   }) {
     const from = (page - 1) * pageSize
     const to = from + pageSize - 1
@@ -22,7 +27,7 @@ export const subjectService = {
       .select(
         isAdmin
           ? 'id, name, language, order_num, is_active, created_at, image_url, color_code'
-          : 'id, name, language, order_num, is_active, created_at, image_url, color_code, chapters!inner(class_id)',
+          : 'id, name, language, order_num, is_active, created_at, image_url, color_code, chapters!inner(class_id, language, is_visible)',
         { count: 'exact' }
       )
     if (search && search.trim().length > 0) {
@@ -37,7 +42,17 @@ export const subjectService = {
       query = query.eq('language', languageFilter)
     }
 
-    if (classFilter) {
+    if (!isAdmin && chapterLanguage) {
+      // Student side: same-named classes of every medium count as "my class"...
+      if (classFilter) {
+        const classIds = await getEquivalentClassIds(supabase, classFilter)
+        query = query.in('chapters.class_id', classIds)
+      }
+      // ...and the chapter's language picks the medium.
+      query = query
+        .or(chapterLanguageFilter(chapterLanguage), { referencedTable: 'chapters', foreignTable: 'chapters' } as any)
+        .eq('chapters.is_visible', true)
+    } else if (classFilter) {
       query = query.eq('chapters.class_id', classFilter)
     }
 

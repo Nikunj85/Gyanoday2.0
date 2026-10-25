@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslation } from 'react-i18next'
 import { Clock } from 'lucide-react'
 import { useState } from 'react'
 import {
@@ -32,30 +33,30 @@ function formatHours(minutes: number) {
   return m === 0 ? `${h}h` : `${h}h ${m}m`
 }
 
-/** Axis label: 45 -> "45m", 60 -> "1h", 90 -> "1h 30m". */
+/**
+ * Y-axis label — ALWAYS in hours: 0, 0.25h, 0.5h, 1h, 1.5h, 2h ...
+ * (the bars' tooltips and the weekly total still show exact minutes).
+ */
 function formatAxisTick(minutes: number) {
-  const value = Math.round(minutes)
-  if (value <= 0) return '0'
-  if (value < 60) return `${value}m`
-  const h = Math.floor(value / 60)
-  const m = value % 60
-  return m === 0 ? `${h}h` : `${h}h ${m}m`
+  if (!minutes || minutes <= 0) return '0h'
+  const hours = Math.round((minutes / 60) * 100) / 100
+  return `${hours}h`
 }
 
-// Clean step sizes, in minutes, for the y-axis.
-const AXIS_STEPS = [1, 2, 5, 10, 15, 20, 30, 60, 120, 180, 240, 360, 480, 720]
+// Step sizes in MINUTES chosen so every tick is a clean hour value:
+// 3m=0.05h, 6m=0.1h, 12m=0.2h, 15m=0.25h, 30m=0.5h, 60m=1h, then whole hours.
+const AXIS_STEPS = [3, 6, 12, 15, 30, 60, 120, 180, 240, 360, 480, 720]
 
 /**
- * Picks a y-axis that fits the data: whole-minute ticks for short sessions, hour ticks for
- * long ones, never more than ~4 intervals. The old axis rounded minutes to whole hours,
- * so any day under 30 minutes produced a column of "0h" labels.
+ * Picks a y-axis in hours that fits the data, with at most ~4 intervals, so short study
+ * sessions still produce a readable scale (0h, 0.1h, 0.2h ...) instead of a column of "0h".
  */
 function buildYAxis(maxMinutes: number) {
   if (!Number.isFinite(maxMinutes) || maxMinutes <= 0) {
-    return { ticks: [0, 10, 20, 30], top: 30 }
+    return { ticks: [0, 30, 60], top: 60 } // empty chart: 0h, 0.5h, 1h
   }
   const step = AXIS_STEPS.find((s) => Math.ceil(maxMinutes / s) <= 4) ?? 720
-  const top = Math.max(1, Math.ceil(maxMinutes / step)) * step
+  const top = Math.max(2, Math.ceil(maxMinutes / step)) * step // always at least 2 intervals
   const ticks: number[] = []
   for (let v = 0; v <= top; v += step) ticks.push(v)
   return { ticks, top }
@@ -65,6 +66,7 @@ export function StudyTimeChart({
   data,
   monthlyData,
 }: StudyTimeChartProps) {
+  const { t } = useTranslation()
   const [view, setView] = useState<View>('weekly')
 
   const isWeekly = view === 'weekly'
@@ -79,7 +81,9 @@ export function StudyTimeChart({
         0
       )
 
-  const title = isWeekly ? 'This Week' : 'This Month'
+  const title = isWeekly
+    ? t('common.student_dashboard.study_time.this_week', 'This Week')
+    : t('common.student_dashboard.study_time.this_month', 'This Month')
 
   const maxMinutes = Math.max(
     0,
@@ -99,11 +103,14 @@ export function StudyTimeChart({
 
           <div>
             <h4 className="text-sm font-bold text-neutral-800 dark:text-neutral-100">
-              Study Time
+              {t('common.student_dashboard.study_time.title', 'Study Time')}
             </h4>
 
             <p className="text-[11px] text-neutral-400 mt-0.5">
-              Tracked learning time from your quiz activity
+              {t(
+                'common.student_dashboard.study_time.subtitle',
+                'Tracked learning time from your quiz activity'
+              )}
             </p>
           </div>
         </div>
@@ -131,8 +138,8 @@ export function StudyTimeChart({
                   }`}
                 >
                   {option === 'weekly'
-                    ? 'Weekly'
-                    : 'Monthly'}
+                    ? t('common.student_dashboard.study_time.weekly', 'Weekly')
+                    : t('common.student_dashboard.study_time.monthly', 'Monthly')}
                 </button>
               )
             )}
@@ -164,6 +171,7 @@ export function StudyTimeChart({
 
               <XAxis
                 dataKey="day"
+                tickFormatter={(v) => t(`common.days_short.${String(v).toLowerCase()}`, String(v))}
                 tickLine={false}
                 axisLine={false}
                 tick={{ fontSize: 11 }}
@@ -173,7 +181,7 @@ export function StudyTimeChart({
                 tickLine={false}
                 axisLine={false}
                 tick={{ fontSize: 10 }}
-                width={52}
+                width={48}
                 domain={[0, yAxis.top]}
                 ticks={yAxis.ticks}
                 allowDecimals={false}
@@ -186,7 +194,7 @@ export function StudyTimeChart({
                 }}
                 formatter={(value) => [
                   formatHours(Number(value ?? 0)),
-                  'Study time',
+                  t('common.student_dashboard.study_time.tooltip', 'Study time'),
                 ]}
                 contentStyle={{
                   borderRadius: 12,
@@ -220,6 +228,11 @@ export function StudyTimeChart({
 
               <XAxis
                 dataKey="label"
+                tickFormatter={(v) =>
+                  String(v).replace(/^Week (\d+)$/, (_m, n) =>
+                    t('common.student_dashboard.study_time.week_n', { defaultValue: 'Week {{n}}', n })
+                  )
+                }
                 tickLine={false}
                 axisLine={false}
                 tick={{ fontSize: 11 }}
@@ -229,7 +242,7 @@ export function StudyTimeChart({
                 tickLine={false}
                 axisLine={false}
                 tick={{ fontSize: 10 }}
-                width={52}
+                width={48}
                 domain={[0, yAxis.top]}
                 ticks={yAxis.ticks}
                 allowDecimals={false}
@@ -242,7 +255,7 @@ export function StudyTimeChart({
                 }}
                 formatter={(value) => [
                   formatHours(Number(value ?? 0)),
-                  'Study time',
+                  t('common.student_dashboard.study_time.tooltip', 'Study time'),
                 ]}
                 contentStyle={{
                   borderRadius: 12,
@@ -266,12 +279,15 @@ export function StudyTimeChart({
       <div className="mt-3 flex items-center justify-between text-[10px] text-neutral-400">
         <span>
           {isWeekly
-            ? 'Monday → Sunday'
-            : 'Current calendar month'}
+            ? t('common.student_dashboard.study_time.range_week', 'Monday → Sunday')
+            : t('common.student_dashboard.study_time.range_month', 'Current calendar month')}
         </span>
 
         <span>
-          Axis scales to your time • tap bars for exact time
+          {t(
+            'common.student_dashboard.study_time.hint',
+            'Axis scales to your time • tap bars for exact time'
+          )}
         </span>
       </div>
     </div>

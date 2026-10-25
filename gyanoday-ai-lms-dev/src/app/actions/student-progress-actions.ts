@@ -1,5 +1,6 @@
 'use server'
 
+import { chapterLanguageFilter, getEquivalentClassIds } from '@/lib/class-utils'
 import { createClient } from '@/lib/supabase/server'
 
 export type MasteryLevel = 'strong' | 'needs_practice' | 'needs_revision' | 'not_attempted'
@@ -101,6 +102,16 @@ export async function getStudentProgressOverview(
     return { subjects: [], weakConcepts: [], studyTimeByDay: [], studyTimeByWeek: [] }
   }
 
+  // The student's medium decides which chapters they see: a Hindi-medium student
+  // only gets Hindi chapters (subjects are shared; chapters carry the language).
+  const { data: profile } = await supabase
+    .from('users')
+    .select('language')
+    .eq('id', userId)
+    .maybeSingle()
+  const medium: string = profile?.language || 'en'
+  const classIds = await getEquivalentClassIds(supabase, classId)
+
   const [
     { data: subjects },
     { data: chapters },
@@ -118,7 +129,8 @@ export async function getStudentProgressOverview(
       supabase
         .from('chapters')
         .select('id, subject_id, title, order_num')
-        .eq('class_id', classId)
+        .in('class_id', classIds)
+        .or(chapterLanguageFilter(medium))
         .eq('is_visible', true)
         .order('order_num', { ascending: true }),
       supabase
