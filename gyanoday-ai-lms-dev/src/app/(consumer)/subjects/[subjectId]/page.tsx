@@ -6,7 +6,9 @@ import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { contentLanguageKey, resolveStudentContentLanguage, textMatchesLanguage } from '@/lib/ai/language'
 import { generateAndSaveSmartNotes } from '@/app/actions/smart-notes-actions'
+import { getStudentChapterSummary } from '@/app/actions/chapter-actions'
 import { getRecommendedTopics } from '@/app/actions/concept-actions'
 import { setChaptersCompletion, toggleChapterCompletion } from '@/app/actions/user-progress-actions'
 import { SmartNotesRenderer } from '@/components/common/SmartNotesRenderer'
@@ -41,6 +43,8 @@ export default function SubjectDetailPage() {
   const [activeChapterId, setActiveChapterId] = useState<string | null>(null)
   const [contentView, setContentView] = useState<'pdf' | 'smart-notes'>('pdf')
   const [isSummaryOpen, setIsSummaryOpen] = useState(false)
+  const [localizedSummary, setLocalizedSummary] = useState('')
+  const [studentSmartNotes, setStudentSmartNotes] = useState<any>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   // Chapter the student is about to mark / unmark — drives the Yes/No confirmation.
   const [pendingToggle, setPendingToggle] = useState<{
@@ -68,15 +72,17 @@ export default function SubjectDetailPage() {
 
   // Fetch Chapters
   const { data: chaptersData, isLoading: isChaptersLoading } = useQuery({
-    queryKey: ['chapters', subjectId, user?.class_id, classIds, user?.language],
+    queryKey: ['chapters', subjectId, user?.class_id, classIds, user?.language, user?.board_id],
     queryFn: () =>
       chapterService.getChapters({
         subjectId,
         classId: user?.class_id || null,
         classIds: classIds || null,
+        boardId: user?.board_id || null,
         pageSize: 1000,
         isVisibleFilter: true,
-        // Hindi-medium students only get Hindi chapters (and so on).
+        // The chapter language column identifies the curriculum medium.
+        // Subject-specific AI output language (English/Hindi) is resolved by the AI services.
         languageFilter: user?.language || 'en',
       }),
     enabled: !!subjectId && !!user && (!user.class_id || !!classIds),
@@ -222,7 +228,17 @@ export default function SubjectDetailPage() {
   useEffect(() => {
     setContentView('pdf')
     setIsSummaryOpen(false)
-  }, [activeChapterId])
+    setLocalizedSummary('')
+    const stored: any = activeChapter?.smart_notes
+    // Same rule as the server: language subjects (English/Hindi/Gujarati) keep their own
+    // language, every other subject follows the student's medium.
+    const contentLanguage = resolveStudentContentLanguage(user?.language || 'en', subject?.name || '')
+    const noteKey = contentLanguageKey(contentLanguage)
+    // Never show cached notes that are in the wrong language (old caches had no language tag);
+    // an empty state makes the student's click regenerate them in the right language.
+    const candidate = stored?._byLanguage?.[noteKey] || (stored?.core_layer ? stored : null)
+    setStudentSmartNotes(candidate && textMatchesLanguage(candidate, contentLanguage) ? candidate : null)
+  }, [activeChapterId, activeChapter, subject?.name, user?.language])
 
   // Trigger AI generation if smart_notes is missing. Uses the real
   // vector-store-backed generator (settings-driven prompt, validated
@@ -234,12 +250,13 @@ export default function SubjectDetailPage() {
   const handleSmartNotesClick = async () => {
     setContentView('smart-notes')
 
-    const hasNotes = !!activeChapter?.smart_notes?.core_layer
+    const hasNotes = !!studentSmartNotes?.core_layer
 
     if (!hasNotes && activeChapter?.id && !isGenerating) {
       try {
         setIsGenerating(true)
-        await generateAndSaveSmartNotes(activeChapter.id)
+        const generatedNotes = await generateAndSaveSmartNotes(activeChapter.id)
+        setStudentSmartNotes(generatedNotes)
         // Refetch chapters data so smart_notes is updated in state
         await queryClient.invalidateQueries({ queryKey: ['chapters', subjectId] })
       } catch (err) {
@@ -259,6 +276,18 @@ export default function SubjectDetailPage() {
     }
   }
 
+  const handleSummaryClick = async () => {
+    setIsSummaryOpen(true)
+    if (!activeChapter?.id || localizedSummary) return
+    try {
+      const result = await getStudentChapterSummary(activeChapter.id)
+      setLocalizedSummary(result.summary)
+    } catch (error) {
+      console.error('Failed to generate localized chapter summary:', error)
+      // Keep the admin-generated description as a useful fallback.
+    }
+  }
+
   return (
     <main className="bg-background transition-colors duration-300 min-h-screen pb-20">
       <MotionWrapper animation="fadeInDown" duration={1.2}>
@@ -271,7 +300,7 @@ export default function SubjectDetailPage() {
           // Header button is subject-level: "Completed" once every chapter is done.
           isChapterCompleted={allChaptersCompleted}
           themeColor={themeColor}
-          onSummaryClick={() => setIsSummaryOpen(true)} // Opens Smart Summary dialog
+          onSummaryClick={() => void handleSummaryClick()} // Opens Smart Summary dialog
           onCompleteClick={requestSubjectCompletion}
           chapterPerformance={chapterPerformance}
           weakTopics={chapterWeakTopics}
@@ -355,7 +384,7 @@ export default function SubjectDetailPage() {
                   </p>
                 </div>
               ) : (
-                <SmartNotesRenderer notes={activeChapter?.smart_notes} />
+                <SmartNotesRenderer notes={studentSmartNotes || undefined} />
               )
             ) : (
               <PDFViewer
@@ -390,7 +419,7 @@ export default function SubjectDetailPage() {
         isOpen={isSummaryOpen}
         onClose={() => setIsSummaryOpen(false)}
         title={activeChapter?.title || 'Chapter Summary'}
-        description={activeChapter?.description || t('common.ui.no_summary_yet', 'No summary available for this chapter yet.')}
+        description={localizedSummary || activeChapter?.description || t('common.ui.no_summary_yet', 'No summary available for this chapter yet.')}
         themeColor={themeColor}
         chapterPerformance={chapterPerformance}
         weakTopics={chapterWeakTopics}

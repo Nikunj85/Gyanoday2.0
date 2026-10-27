@@ -1,12 +1,16 @@
 import { createClient } from '@/lib/supabase/client'
-import { chapterLanguageFilter, getEquivalentClassIds } from '@/lib/class-utils'
+import {
+  chapterLanguageFilter,
+  getEquivalentClassIds,
+  normalizeMedium,
+} from '@/lib/class-utils'
 import { Chapter } from '@/types'
 
 const supabase = createClient()
 
 export const chapterService = {
   async getAll(subjectId?: string) {
-    let query = supabase.from('chapters').select('*')
+    let query = supabase.from('chapters').select('*, board:boards(name)')
 
     if (subjectId) {
       query = query.eq('subject_id', subjectId)
@@ -23,14 +27,22 @@ export const chapterService = {
   async getById(id: string) {
     const { data, error } = await supabase
       .from('chapters')
-      .select('*, subject:subjects(name, color_code), class:classes(name)')
+      .select(
+        '*, subject:subjects(name, color_code, language), class:classes(name), board:boards(name)'
+      )
       .eq('id', id)
       .single()
 
     if (error) throw error
+
     return data as Chapter & {
-      subject?: { name: string; color_code?: string }
+      subject?: {
+        name: string
+        color_code?: string
+        language?: string
+      }
       class?: { name: string }
+      board?: { name: string }
     }
   },
 
@@ -41,6 +53,7 @@ export const chapterService = {
     subjectId = null,
     classId = null,
     classIds = null,
+    boardId = null,
     isVisibleFilter = null,
     languageFilter = 'all',
     client = null,
@@ -52,14 +65,19 @@ export const chapterService = {
     classId?: string | null
     /** Several class rows treated as one class (same class name, different medium). */
     classIds?: string[] | null
+    boardId?: string | null
     isVisibleFilter?: boolean | null
     languageFilter?: string
     client?: any
   }) {
     const currentClient = client || supabase
+
     let query = currentClient
       .from('chapters')
-      .select('*, subject:subjects(name), class:classes(name)', { count: 'exact' })
+      .select(
+        '*, subject:subjects(name), class:classes(name), board:boards(name)',
+        { count: 'exact' }
+      )
 
     if (search) {
       query = query.ilike('title', `%${search}%`)
@@ -79,7 +97,13 @@ export const chapterService = {
       query = query.eq('class_id', classId)
     }
 
-    if (languageFilter && languageFilter !== 'all') {
+    if (boardId) {
+      query = query.or(`board_id.eq.${boardId},board_id.is.null`)
+    }
+
+    // Avoid adding a second .or(), which would replace the board filter.
+    // Apply the language filter to fetched rows below when a board is selected.
+    if (languageFilter && languageFilter !== 'all' && !boardId) {
       query = query.or(chapterLanguageFilter(languageFilter))
     }
 
@@ -93,14 +117,38 @@ export const chapterService = {
 
     if (error) throw error
 
+    let rows: any[] = data || []
+
+    if (languageFilter && languageFilter !== 'all') {
+      const medium = normalizeMedium(languageFilter)
+
+      rows = rows.filter((chapter: any) => {
+        const chapterMedium = normalizeMedium(chapter.language || 'en')
+        return (
+          chapterMedium === medium ||
+          (!chapter.language && medium === 'en')
+        )
+      })
+    }
+
     return {
-      data: data as (Chapter & { subject?: { name: string }; class?: { name: string } })[],
-      total: count || 0,
+      data: rows as (Chapter & {
+        subject?: { name: string }
+        class?: { name: string }
+        board?: { name: string }
+      })[],
+      total: languageFilter !== 'all' ? rows.length : count || 0,
     }
   },
 
-  async create(newChapter: Omit<Chapter, 'id' | 'created_at' | 'updated_at'>) {
-    const { data, error } = await supabase.from('chapters').insert([newChapter]).select().single()
+  async create(
+    newChapter: Omit<Chapter, 'id' | 'created_at' | 'updated_at'>
+  ) {
+    const { data, error } = await supabase
+      .from('chapters')
+      .insert([newChapter])
+      .select()
+      .single()
 
     if (error) throw error
     return data
@@ -119,7 +167,7 @@ export const chapterService = {
   },
 
   async delete(id: string) {
-    // 1. Get the chapter to find the PDF URL
+    // Get the chapter to find its PDF URL.
     const { data: chapter, error: fetchError } = await supabase
       .from('chapters')
       .select('pdf_url')
@@ -128,15 +176,13 @@ export const chapterService = {
 
     if (fetchError) {
       console.error('Error fetching chapter for deletion:', fetchError)
-      // If chapter not found, we can't delete it anyway, but let's proceed to try deleting by ID just in case
     }
 
-    // 2. If there is a PDF, delete it from storage
+    // Delete the PDF from storage if it exists.
     if (chapter?.pdf_url) {
       try {
-        // Extract path from URL.
-        // Expected format: .../storage/v1/object/public/chapter-pdfs/folder/file.pdf
         const urlParts = chapter.pdf_url.split('/chapter-pdfs/')
+
         if (urlParts.length > 1) {
           const filePath = urlParts[1]
 
@@ -145,15 +191,21 @@ export const chapterService = {
             .remove([decodeURIComponent(filePath)])
 
           if (storageError) {
-            console.error('Error deleting file from storage:', storageError)
+            console.error(
+              'Error deleting file from storage:',
+              storageError
+            )
           }
         }
-      } catch (e) {
-        console.error('Error processing file deletion:', e)
+      } catch (error) {
+        console.error('Error processing file deletion:', error)
       }
     }
 
-    const { error } = await supabase.from('chapters').delete().eq('id', id)
+    const { error } = await supabase
+      .from('chapters')
+      .delete()
+      .eq('id', id)
 
     if (error) throw error
     return true
@@ -161,11 +213,15 @@ export const chapterService = {
 
   async reorder(orders: { id: string; order_num: number }[]) {
     const promises = orders.map((item) =>
-      supabase.from('chapters').update({ order_num: item.order_num }).eq('id', item.id)
+      supabase
+        .from('chapters')
+        .update({ order_num: item.order_num })
+        .eq('id', item.id)
     )
 
     const results = await Promise.all(promises)
-    const error = results.find((r) => r.error)?.error
+    const error = results.find((result) => result.error)?.error
+
     if (error) throw error
     return true
   },
@@ -174,64 +230,95 @@ export const chapterService = {
     userId: string,
     subjectIds: string[],
     classId?: string | null,
-    language?: string | null
+    language?: string | null,
+    boardId?: string | null
   ) {
     if (!subjectIds.length) return {}
 
-    // 1. Get all chapters for these subjects to count totals
+    // Fetch visible chapters for the requested subjects.
     let query = supabase
       .from('chapters')
-      .select('id, subject_id')
+      .select('id, subject_id, language, board_id, subject:subjects(name)')
       .in('subject_id', subjectIds)
       .eq('is_visible', true)
 
     if (classId) {
-      query = query.in('class_id', await getEquivalentClassIds(supabase, classId))
+      query = query.in(
+        'class_id',
+        await getEquivalentClassIds(supabase, classId)
+      )
     }
 
-    // Only count chapters in the student's medium.
-    if (language) {
-      query = query.or(chapterLanguageFilter(language))
+    if (boardId) {
+      query = query.or(`board_id.eq.${boardId},board_id.is.null`)
     }
 
-    const { data: allChapters, error: chaptersError } = await query
+    const { data: fetchedChapters, error: chaptersError } = await query
 
     if (chaptersError) throw chaptersError
 
-    // 2. Get user's completed chapters
-    const { data: completedProgress, error: progressError } = await supabase
-      .from('user_chapter_progress')
-      .select('chapter_id')
-      .eq('user_id', userId)
-      .eq('is_completed', true)
-      .in('chapter_id', allChapters?.map((c: { id: string }) => c.id) || [])
+    // `chapters.language` stores the curriculum MEDIUM (en/hi/gu) the chapter belongs to,
+    // not the language the subject is taught in. A Gujarati-medium student's English or
+    // Hindi subject therefore has `gu` chapters. Filter by the student's medium only
+    // (same rule as subjectService.getSubjects) - never by the subject's own language.
+    const studentMedium = normalizeMedium(language || 'en')
 
-    if (progressError) throw progressError
+    const allChapters = (fetchedChapters || []).filter((chapter: any) => {
+      const chapterMedium = normalizeMedium(chapter.language || 'en')
+      return chapterMedium === studentMedium
+    })
 
-    // 3. Aggregate results
-    const progressMap: Record<string, { total: number; completed: number }> = {}
+    // Fetch completed chapters for this user.
+    const chapterIds = allChapters.map(
+      (chapter: { id: string }) => chapter.id
+    )
 
-    // Initialize map
+    let completedProgress: { chapter_id: string }[] = []
+
+    if (chapterIds.length > 0) {
+      const { data, error: progressError } = await supabase
+        .from('user_chapter_progress')
+        .select('chapter_id')
+        .eq('user_id', userId)
+        .eq('is_completed', true)
+        .in('chapter_id', chapterIds)
+
+      if (progressError) throw progressError
+      completedProgress = data || []
+    }
+
+    // Initialize progress for each requested subject.
+    const progressMap: Record<
+      string,
+      { total: number; completed: number }
+    > = {}
+
     subjectIds.forEach((id) => {
       progressMap[id] = { total: 0, completed: 0 }
     })
 
-    // Count totals
-    allChapters?.forEach((chapter: { id: string; subject_id: string }) => {
-      if (progressMap[chapter.subject_id]) {
-        progressMap[chapter.subject_id].total++
+    // Count all matching chapters.
+    allChapters.forEach(
+      (chapter: { id: string; subject_id: string }) => {
+        if (progressMap[chapter.subject_id]) {
+          progressMap[chapter.subject_id].total++
+        }
       }
-    })
+    )
 
-    // Count completed (need to map back to subject)
-    // Create a lookup for chapter -> subject
+    // Map chapter IDs to their subject IDs.
     const chapterSubjectMap = new Map<string, string>()
-    allChapters?.forEach((c: { id: string; subject_id: string }) => {
-      chapterSubjectMap.set(c.id, c.subject_id)
-    })
 
-    completedProgress?.forEach((p: { chapter_id: string }) => {
-      const subjectId = chapterSubjectMap.get(p.chapter_id)
+    allChapters.forEach(
+      (chapter: { id: string; subject_id: string }) => {
+        chapterSubjectMap.set(chapter.id, chapter.subject_id)
+      }
+    )
+
+    // Count completed chapters.
+    completedProgress.forEach((progress) => {
+      const subjectId = chapterSubjectMap.get(progress.chapter_id)
+
       if (subjectId && progressMap[subjectId]) {
         progressMap[subjectId].completed++
       }

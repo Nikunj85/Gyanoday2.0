@@ -3,6 +3,8 @@
 import { requireUser } from '@/lib/auth/guards'
 import { chatbotAiService } from '@/services/ai/chatbot-ai-service'
 import { chapterServerService } from '@/services/chapter-server-service'
+import { supabaseAdmin } from '@/lib/supabase/admin'
+import { resolveStudentContentLanguage } from '@/lib/ai/language'
 
 interface ChapterData {
   id: string
@@ -52,7 +54,7 @@ export async function getChatbotResponse(
   studentName: string = ''
 ) {
   try {
-    await requireUser()
+    const user = await requireUser()
     if (!chapterId) {
       throw new Error('Chapter ID is required to process the request.')
     }
@@ -65,7 +67,9 @@ export async function getChatbotResponse(
       throw new Error('The selected chapter does not have an associated PDF document.')
     }
 
-    const language = chapter.language || 'en'
+    const { data: profile } = await supabaseAdmin.from('users').select('language').eq('id', user.id).maybeSingle()
+    const subjectName = (chapter as any).subject?.name || ''
+    const language = resolveStudentContentLanguage(profile?.language || 'en', subjectName)
 
     // 2. Pass retrieved URL and Chapter language to the AI service
     const answer = await chatbotAiService.generateAnswerFromChapterId(chapterId, {

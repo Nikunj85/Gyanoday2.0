@@ -16,6 +16,7 @@ import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { authService } from '@/services/auth-service'
 import { classService } from '@/services/class-service'
+import { boardService, Board } from '@/services/board-service'
 import { useUserStore } from '@/store/user-store'
 import { Language, User, UserRole } from '@/types/users'
 
@@ -39,6 +40,7 @@ const registerSchema = z.object({
     .or(z.literal('')),
   school_name: z.string().min(2, 'common.auth.errors.school_required').max(100, 'common.auth.errors.school_long'),
   class_id: z.string().min(1, 'common.auth.errors.class_required'),
+  board_id: z.string().min(1, 'Please select your education board.'),
   language: z.nativeEnum(Language),
 })
 
@@ -73,14 +75,22 @@ export default function RegisterPage() {
     resolver: zodResolver(registerSchema),
     defaultValues: {
       language: Language.EN,
+      board_id: '',
     },
   })
 
   const selectedLanguage = watch('language')
+  const selectedBoard = watch('board_id')
+  const { data: boards = [], isLoading: isLoadingBoards } = useQuery({ queryKey: ['boards'], queryFn: () => boardService.getAll() })
 
   // Choosing the medium of instruction switches the page language right away, and the
   // class list is per-medium (Class 10 exists once for each), so clear any earlier pick.
   const previousMedium = useRef(selectedLanguage)
+  const previousBoard = useRef(selectedBoard)
+  useEffect(() => {
+    if (previousBoard.current !== selectedBoard) setValue('class_id', '')
+    previousBoard.current = selectedBoard
+  }, [selectedBoard, setValue])
   useEffect(() => {
     if (selectedLanguage && (i18n.language || '').split('-')[0] !== selectedLanguage) {
       i18n.changeLanguage(selectedLanguage)
@@ -92,14 +102,14 @@ export default function RegisterPage() {
   }, [selectedLanguage, i18n, setValue])
 
   const { data: classesData, isLoading: isLoadingClasses } = useQuery({
-    queryKey: ['classes-list', selectedLanguage],
+    queryKey: ['classes-list', selectedLanguage, selectedBoard],
     queryFn: () =>
       classService.getClasses({
         page: 1,
         pageSize: 100,
         statusFilter: true,
         languageFilter: selectedLanguage,
-      }),
+      }).then((result) => ({ ...result, data: result.data.filter((cls: any) => !selectedBoard || cls.board_id === selectedBoard) })),
   })
 
   useEffect(() => {
@@ -112,7 +122,7 @@ export default function RegisterPage() {
           // Check if user exists in our database and has a completed profile
           const { data: userData } = await supabase
             .from('users')
-            .select('id, class_id')
+            .select('id, class_id, board_id')
             .eq('id', session.user.id)
             .single()
 
@@ -258,6 +268,7 @@ export default function RegisterPage() {
             phone: data.phone,
             school_name: data.school_name,
             class_id: data.class_id,
+            board_id: data.board_id,
             language: data.language,
             is_active: true,
           })
@@ -280,6 +291,7 @@ export default function RegisterPage() {
             name,
             role,
             class_id,
+            board_id,
             language,
             school_name,
             phone,
@@ -509,6 +521,19 @@ export default function RegisterPage() {
                       {tr(errors.language.message)}
                     </p>
                   )}
+                </div>
+
+                {/* Education Board */}
+                <div>
+                  <label className="mb-1.5 block text-sm font-semibold text-neutral-700 dark:text-neutral-300">Education Board</label>
+                  <div className="relative">
+                    <select {...register('board_id')} className={cn('w-full appearance-none rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 pr-10 text-neutral-900 transition-all focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/5 dark:border-neutral-700 dark:bg-neutral-900/50 dark:text-white', errors.board_id && 'border-red-500') } disabled={isLoadingBoards}>
+                      <option value="">Select your board</option>
+                      {boards.map((board: Board) => <option key={board.id} value={board.id}>{board.name}</option>)}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" size={20} />
+                  </div>
+                  {errors.board_id && <p className="mt-1.5 text-xs font-medium text-red-500">{errors.board_id.message}</p>}
                 </div>
 
                 {/* Class (6) */}

@@ -3,79 +3,128 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 export interface ContactRequestData {
   fullName: string
   email: string
-  class?: string
-  message?: string
+  class: string
+  message: string
 }
 
 export interface ContactRequest {
   id: string
   full_name: string
-  email: string
-  std?: string
-  message: string
+  email: string | null
+  std: string | null
+  message: string | null
   created_at: string
+}
+
+interface GetContactRequestsParams {
+  page?: number
+  pageSize?: number
+  search?: string
 }
 
 export const contactServerService = {
   /**
-   * Saves a new contact request to the database.
+   * Saves a contact form submission in Supabase.
+   * The Admin > Contacts page reads from the same student_contacts table.
    */
-  async saveContactRequest(data: ContactRequestData): Promise<{ success: true }> {
-    // Standard client is fine for insert if RLS allows it,
-    // but using admin ensures it works during setup.
-    const { error } = await supabaseAdmin.from('student_contacts').insert({
-      full_name: data.fullName,
-      email: data.email,
-      std: data.class,
-      message: data.message,
-    })
+  async saveContactRequest(data: ContactRequestData) {
+    const fullName = String(data.fullName ?? '').trim()
+    const email = String(data.email ?? '').trim().toLowerCase()
+    const studentClass = String(data.class ?? '').trim()
+    const message = String(data.message ?? '').trim()
 
-    if (error) {
-      console.error('[ContactServerService] Error saving contact request:', error)
-      throw new Error(error.message)
+    if (!fullName || !email || !message) {
+      return {
+        success: false,
+        error: 'Name, email, and message are required.',
+      }
     }
 
-    return { success: true }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return {
+        success: false,
+        error: 'Please enter a valid email address.',
+      }
+    }
+
+    const { error } = await supabaseAdmin
+      .from('student_contacts')
+      .insert({
+        full_name: fullName,
+        email,
+        std: studentClass || null,
+        message,
+      })
+
+    if (error) {
+      console.error(
+        '[ContactServerService] Failed to save contact request:',
+        error
+      )
+
+      throw new Error('Failed to save your message. Please try again.')
+    }
+
+    return {
+      success: true,
+      message: 'Your message has been submitted successfully.',
+    }
   },
 
   /**
-   * Fetches contact requests using the admin client to bypass RLS.
+   * Retrieves contact requests for the Admin > Contacts page.
    */
   async getContactRequests({
     page = 1,
     pageSize = 10,
     search = '',
-  }: {
-    page?: number
-    pageSize?: number
-    search?: string
-  }) {
-    let query = supabaseAdmin.from('student_contacts').select('*', { count: 'exact' })
+  }: GetContactRequestsParams = {}): Promise<{
+    data: ContactRequest[]
+    total: number
+  }> {
+    const safePage = Math.max(1, Math.floor(page))
+    const safePageSize = Math.min(
+      100,
+      Math.max(1, Math.floor(pageSize))
+    )
 
-    // Strip characters that have meaning inside a PostgREST .or() filter / LIKE pattern,
-    // so a search term can't inject extra filter conditions.
-    const safeSearch = search.replace(/[%_,()\\]/g, '').trim()
-    if (safeSearch) {
+    let query = supabaseAdmin
+      .from('student_contacts')
+      .select(
+        'id, full_name, email, std, message, created_at',
+        { count: 'exact' }
+      )
+
+    const searchTerm = search.trim()
+
+    if (searchTerm) {
+      const escapedSearch = searchTerm.replace(/[,%()]/g, '')
+      const pattern = `%${escapedSearch}%`
+
       query = query.or(
-        `full_name.ilike.%${safeSearch}%,email.ilike.%${safeSearch}%,message.ilike.%${safeSearch}%`
+        `full_name.ilike.${pattern},email.ilike.${pattern},message.ilike.${pattern}`
       )
     }
 
-    const start = (page - 1) * pageSize
-    const end = start + pageSize - 1
+    const start = (safePage - 1) * safePageSize
+    const end = start + safePageSize - 1
 
     const { data, error, count } = await query
       .order('created_at', { ascending: false })
       .range(start, end)
 
     if (error) {
-      console.error('[ContactServerService] Error fetching contacts:', error)
-      throw error
+      console.error(
+        '[ContactServerService] Failed to fetch contact requests:',
+        error
+      )
+
+      throw new Error('Failed to load contact requests.')
     }
 
     return {
-      data: (data || []) as ContactRequest[],
-      total: count || 0,
+      data: (data ?? []) as ContactRequest[],
+      total: count ?? 0,
     }
   },
 }

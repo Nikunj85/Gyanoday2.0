@@ -1,4 +1,4 @@
-import { languageEnforcement, resolveContentLanguage } from '@/lib/ai/language'
+import { languageEnforcement, resolveStudentContentLanguage } from '@/lib/ai/language'
 import { buildPrompt } from '@/lib/ai/promptUtils'
 import { AiInsightSchema } from '@/lib/constants/insight_keys'
 import { PromptKeys } from '@/lib/constants/prompt_keys'
@@ -117,12 +117,7 @@ export const insightAiService = {
       // The result summary must use the language of the chapter that was
       // actually quizzed. Do not let the subject or student's profile
       // language override a Hindi/Gujarati chapter.
-      language: resolveContentLanguage({
-        chapterLanguage: (chapterData as any).language,
-        subjectLanguage: ((chapterData as any).subject as any)?.language,
-        subjectName: ((chapterData as any).subject as any)?.name,
-        fallbackLanguage: userData.language,
-      }),
+      language: resolveStudentContentLanguage(userData.language, ((chapterData as any).subject as any)?.name),
       student_name: userData.name || 'Student',
       quiz_data: formattedQuizData,
     }

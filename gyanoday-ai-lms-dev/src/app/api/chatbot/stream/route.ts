@@ -3,6 +3,8 @@ import { NextRequest } from 'next/server'
 import { requireUser } from '@/lib/auth/guards'
 import { chatbotAiService } from '@/services/ai/chatbot-ai-service'
 import { chapterServerService } from '@/services/chapter-server-service'
+import { supabaseAdmin } from '@/lib/supabase/admin'
+import { resolveStudentContentLanguage } from '@/lib/ai/language'
 
 export const runtime = 'nodejs'
 
@@ -10,56 +12,111 @@ interface StreamRequestBody {
   chapterId: string
   question: string
   history?: string
-  studentName?: string
 }
 
-/**
- * Streams the chatbot's answer back to the client as plain text chunks,
- * as they are produced by the model, instead of waiting for the full
- * response (see AIChatBot.tsx for the client-side reader).
- */
+interface SubjectWithLanguage {
+  name?: string
+  language?: string
+  color_code?: string
+}
+
 export async function POST(req: NextRequest) {
-  // Chapter content and AI credits are for signed-in students only.
+  let authenticatedUser: Awaited<ReturnType<typeof requireUser>>
+
   try {
-    await requireUser()
+    authenticatedUser = await requireUser()
   } catch {
     return new Response('Not authenticated', { status: 401 })
   }
 
   let body: StreamRequestBody
+
   try {
     body = await req.json()
   } catch {
     return new Response('Invalid request body', { status: 400 })
   }
 
-  const { chapterId, question: rawQuestion, history: rawHistory = '', studentName: rawName = '' } = body
+  const {
+    chapterId,
+    question: rawQuestion,
+    history: rawHistory = '',
+  } = body
 
-  if (!chapterId || !rawQuestion || typeof rawQuestion !== 'string') {
-    return new Response('chapterId and question are required', { status: 400 })
+  if (
+    !chapterId ||
+    typeof rawQuestion !== 'string' ||
+    !rawQuestion.trim()
+  ) {
+    return new Response('chapterId and question are required', {
+      status: 400,
+    })
   }
 
-  // Cap input sizes so a single request can't run up the AI bill or stuff the prompt.
   const question = rawQuestion.slice(0, 2000)
   const history = String(rawHistory ?? '').slice(-8000)
-  const studentName = String(rawName ?? '').slice(0, 80)
-
   const encoder = new TextEncoder()
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const chapter = await chapterServerService.getChapterById(chapterId)
+        const chapter =
+          await chapterServerService.getChapterById(chapterId)
 
-        if (!chapter?.pdf_url) {
+        if (!chapter) {
           controller.enqueue(
-            encoder.encode('This chapter does not have an associated document to answer from.')
+            encoder.encode('Chapter not found.')
           )
           controller.close()
           return
         }
 
-        const language = chapter.language || 'en'
+        if (!chapter.pdf_url) {
+          controller.enqueue(
+            encoder.encode(
+              'This chapter does not have an associated document to answer from.'
+            )
+          )
+          controller.close()
+          return
+        }
+
+        // Load the authenticated student's own profile.
+        const { data: profile, error: profileError } =
+          await supabaseAdmin
+            .from('users')
+            .select('name, language, role')
+            .eq('id', authenticatedUser.id)
+            .maybeSingle()
+
+        if (profileError) {
+          console.error(
+            '[api/chatbot/stream] Could not load student profile:',
+            profileError
+          )
+        }
+
+        // The service's current inferred subject type does not include
+        // language. This local type safely supports it when the service
+        // returns the language field.
+        const subject = chapter.subject as
+          | SubjectWithLanguage
+          | null
+          | undefined
+
+        const studentMedium = profile?.language || 'en'
+        const subjectName = subject?.name || ''
+        const subjectLanguage = subject?.language || 'en'
+
+        const language = resolveStudentContentLanguage(
+          studentMedium,
+          subjectName,
+          subjectLanguage
+        )
+
+        const trustedStudentName = (
+          profile?.name || 'Student'
+        ).slice(0, 80)
 
         for await (const chunk of chatbotAiService.streamAnswerFromChapterId(
           chapterId,
@@ -67,26 +124,26 @@ export async function POST(req: NextRequest) {
             question,
             conversation_history: history,
             language,
-            student_name: studentName,
+            student_name: trustedStudentName,
           },
-          chapter // avoid re-fetching the chapter a second time
+          chapter
         )) {
           controller.enqueue(encoder.encode(chunk))
         }
       } catch (error) {
-        // This log is the actual point of the fix — previously nothing
-        // was logged here at all, so a real OpenAI/API failure (bad key,
-        // quota, invalid vector store, etc.) was completely invisible on
-        // the server side. Check your terminal for this line.
-        console.error('[api/chatbot/stream] ERROR generating chatbot response:', error)
+        console.error(
+          '[api/chatbot/stream] ERROR generating chatbot response:',
+          error
+        )
 
         const message =
           error instanceof Error && error.message
             ? error.message
             : 'An unexpected error occurred while generating the chatbot response.'
-        // Emit a marker the client can detect and surface as an error toast,
-        // since headers are already committed once streaming has started.
-        controller.enqueue(encoder.encode(`\n[[STREAM_ERROR]]${message}`))
+
+        controller.enqueue(
+          encoder.encode(`\n[[STREAM_ERROR]]${message}`)
+        )
       } finally {
         controller.close()
       }

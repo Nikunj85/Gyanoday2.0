@@ -131,6 +131,7 @@ export function ChaptersTable({
               <TableHead className="admin-table-header">Chapter Title</TableHead>
               <TableHead className="admin-table-header hidden md:table-cell">Class</TableHead>
               <TableHead className="admin-table-header hidden md:table-cell">Subject</TableHead>
+              <TableHead className="admin-table-header">Board</TableHead>
               <TableHead className="admin-table-header">Language</TableHead>
               <TableHead className="admin-table-header text-center w-[60px]">#</TableHead>
               <TableHead className="admin-table-header text-center hidden sm:table-cell">
@@ -142,7 +143,7 @@ export function ChaptersTable({
           <TableBody>
             {[...Array(5)].map((_, i) => (
               <TableRow key={i} className="admin-table-row">
-                <TableCell className="admin-table-cell py-4" colSpan={8}>
+                <TableCell className="admin-table-cell py-4" colSpan={9}>
                   <div className="h-6 w-full animate-shimmer rounded-lg" />
                 </TableCell>
               </TableRow>
@@ -177,6 +178,7 @@ export function ChaptersTable({
                   <TableHead className="admin-table-header">Chapter Title</TableHead>
                   <TableHead className="admin-table-header hidden md:table-cell">Class</TableHead>
                   <TableHead className="admin-table-header hidden md:table-cell">Subject</TableHead>
+                  <TableHead className="admin-table-header">Board</TableHead>
                   <TableHead className="admin-table-header">Language</TableHead>
                   <TableHead className="admin-table-header text-center w-[60px]">#</TableHead>
                   <TableHead className="admin-table-header text-center hidden sm:table-cell">
@@ -230,6 +232,9 @@ export function ChaptersTable({
                           <span className="text-sm text-muted-foreground">
                             {chapter.subject?.name || '-'}
                           </span>
+                        </TableCell>
+                        <TableCell className="admin-table-cell py-4 text-xs text-muted-foreground">
+                          {chapter.board?.name || '—'}
                         </TableCell>
                         <TableCell className="admin-table-cell py-4">
                           <div className="flex items-center text-xs text-muted-foreground">

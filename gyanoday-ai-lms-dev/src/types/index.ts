@@ -7,6 +7,8 @@ export interface Class {
   order_num: number
   is_active: boolean
   language: Language
+  board_id?: string | null
+  board?: { name: string } | null
   students_count?: number
   created_at: string
   updated_at: string
@@ -21,6 +23,8 @@ export interface Chapter {
   order_num: number
   is_visible: boolean
   language: Language
+  board_id?: string | null
+  board?: { name: string } | null
   file_url?: string; 
   pdf_url?: string
   file_id?: string
@@ -40,6 +44,8 @@ export interface Subject {
   order_num: number
   is_active: boolean
   language: Language
+  board_id?: string | null
+  board?: { name: string } | null
   created_at: string
   image_url?: string | null
   color_code?: string | null

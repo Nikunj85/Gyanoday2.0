@@ -78,6 +78,14 @@ function normalizeReport(raw: any): ReportData {
 /* ---------- Labels (the report follows the child's medium) ---------- */
 
 interface Labels {
+  portal: string
+  welcome: string
+  description: string
+  loadingStudents: string
+  loadError: string
+  noStudents: string
+  linkHelp: string
+  retryHelp: string
   report: string
   loading: string
   tryAgain: string
@@ -103,6 +111,14 @@ interface Labels {
 
 const LABELS: Record<'English' | 'Hindi' | 'Gujarati', Labels> = {
   English: {
+    portal: 'Parent Portal',
+    welcome: 'Welcome',
+    description: "Your child's study time, concept mastery, and a plain-language summary of how they're doing this week.",
+    loadingStudents: 'Loading linked students…',
+    loadError: 'Unable to load linked students',
+    noStudents: 'No students linked yet',
+    linkHelp: 'Ask your school to link your account to your child from the admin panel.',
+    retryHelp: 'Please refresh the page and try again.',
     report: 'Weekly Progress Report',
     loading: "Preparing this week's report…",
     tryAgain: 'Try again',
@@ -131,6 +147,14 @@ const LABELS: Record<'English' | 'Hindi' | 'Gujarati', Labels> = {
     },
   },
   Hindi: {
+    portal: 'अभिभावक पोर्टल',
+    welcome: 'स्वागत है',
+    description: 'बच्चे का अध्ययन समय, विषयों की समझ और इस सप्ताह की प्रगति का सरल सारांश।',
+    loadingStudents: 'जुड़े हुए विद्यार्थियों को लोड किया जा रहा है…',
+    loadError: 'जुड़े हुए विद्यार्थियों को लोड नहीं किया जा सका',
+    noStudents: 'अभी कोई विद्यार्थी लिंक नहीं है',
+    linkHelp: 'एडमिन पैनल से अपने बच्चे के साथ अपना खाता लिंक करने के लिए स्कूल से संपर्क करें।',
+    retryHelp: 'कृपया पेज रीफ़्रेश करके फिर कोशिश करें।',
     report: 'साप्ताहिक प्रगति रिपोर्ट',
     loading: 'इस सप्ताह की रिपोर्ट तैयार हो रही है…',
     tryAgain: 'फिर से कोशिश करें',
@@ -159,6 +183,14 @@ const LABELS: Record<'English' | 'Hindi' | 'Gujarati', Labels> = {
     },
   },
   Gujarati: {
+    portal: 'વાલી પોર્ટલ',
+    welcome: 'સ્વાગત છે',
+    description: 'બાળકનો અભ્યાસ સમય, વિષયોની સમજ અને આ અઠવાડિયાની પ્રગતિનો સરળ સારાંશ.',
+    loadingStudents: 'જોડાયેલા વિદ્યાર્થીઓ લોડ થઈ રહ્યા છે…',
+    loadError: 'જોડાયેલા વિદ્યાર્થીઓ લોડ થઈ શક્યા નથી',
+    noStudents: 'હજુ કોઈ વિદ્યાર્થી જોડાયેલો નથી',
+    linkHelp: 'એડમિન પેનલમાં તમારા બાળક સાથે તમારું એકાઉન્ટ જોડવા માટે શાળાનો સંપર્ક કરો.',
+    retryHelp: 'કૃપા કરીને પેજ રિફ્રેશ કરીને ફરી પ્રયાસ કરો.',
     report: 'સાપ્તાહિક પ્રગતિ અહેવાલ',
     loading: 'આ અઠવાડિયાનો અહેવાલ તૈયાર થઈ રહ્યો છે…',
     tryAgain: 'ફરી પ્રયાસ કરો',
@@ -578,19 +610,20 @@ export default function ParentDashboardPage() {
     retry: 1,
   })
 
+  const parentLanguage = LABELS[languageLabel(students?.[0]?.language || 'en')]
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-3xl">
       <div className="mb-8">
         <div className="flex items-center gap-2 text-primary mb-1">
           <Users size={18} />
-          <p className="text-xs font-bold uppercase tracking-widest">Parent Portal</p>
+          <p className="text-xs font-bold uppercase tracking-widest">{parentLanguage.portal}</p>
         </div>
         <h1 className="text-2xl font-bold text-neutral-800 dark:text-neutral-100">
-          Welcome{user?.name ? `, ${user.name}` : ''}
+          {parentLanguage.welcome}{user?.name ? `, ${user.name}` : ''}
         </h1>
         <p className="text-sm text-neutral-500 mt-1">
-          Your child&apos;s study time, concept mastery, and a plain-language summary of how
-          they&apos;re doing this week.
+          {parentLanguage.description}
         </p>
       </div>
 
@@ -601,19 +634,19 @@ export default function ParentDashboardPage() {
       ) : isError ? (
         <div className="text-center py-16 bg-red-50/60 dark:bg-red-950/20 rounded-3xl border border-red-100 dark:border-red-900/40">
           <Users className="mx-auto mb-3 text-red-300" size={32} />
-          <p className="font-semibold text-red-600 dark:text-red-400">Unable to load linked students</p>
+          <p className="font-semibold text-red-600 dark:text-red-400">{parentLanguage.loadError}</p>
           <p className="text-sm text-red-400 mt-1 max-w-sm mx-auto">
-            {error instanceof Error ? error.message : 'Please refresh the page and try again.'}
+            {error instanceof Error ? error.message : parentLanguage.retryHelp}
           </p>
         </div>
       ) : !students || students.length === 0 ? (
         <div className="text-center py-16 bg-neutral-50 dark:bg-neutral-900 rounded-3xl border border-dashed border-neutral-200 dark:border-neutral-800">
           <Users className="mx-auto mb-3 text-neutral-300" size={32} />
           <p className="font-semibold text-neutral-600 dark:text-neutral-300">
-            No students linked yet
+            {parentLanguage.noStudents}
           </p>
           <p className="text-sm text-neutral-400 mt-1 max-w-sm mx-auto">
-            Ask your school to link your account to your child from the admin panel.
+            {parentLanguage.linkHelp}
           </p>
         </div>
       ) : (

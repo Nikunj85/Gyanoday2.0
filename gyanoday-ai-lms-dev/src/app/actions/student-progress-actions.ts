@@ -1,6 +1,6 @@
 'use server'
 
-import { chapterLanguageFilter, getEquivalentClassIds } from '@/lib/class-utils'
+import { getEquivalentClassIds, normalizeMedium } from '@/lib/class-utils'
 import { createClient } from '@/lib/supabase/server'
 
 export type MasteryLevel = 'strong' | 'needs_practice' | 'needs_revision' | 'not_attempted'
@@ -106,10 +106,11 @@ export async function getStudentProgressOverview(
   // only gets Hindi chapters (subjects are shared; chapters carry the language).
   const { data: profile } = await supabase
     .from('users')
-    .select('language')
+    .select('language, board_id')
     .eq('id', userId)
     .maybeSingle()
   const medium: string = profile?.language || 'en'
+  const boardId: string | null = profile?.board_id || null
   const classIds = await getEquivalentClassIds(supabase, classId)
 
   const [
@@ -128,9 +129,8 @@ export async function getStudentProgressOverview(
         .order('order_num', { ascending: true }),
       supabase
         .from('chapters')
-        .select('id, subject_id, title, order_num')
+        .select('id, subject_id, title, order_num, language, board_id, subject:subjects(name)')
         .in('class_id', classIds)
-        .or(chapterLanguageFilter(medium))
         .eq('is_visible', true)
         .order('order_num', { ascending: true }),
       supabase
@@ -159,6 +159,15 @@ export async function getStudentProgressOverview(
       // as "no data" on the dashboard forever.
       supabase.from('quizzes').select('chapter_id, num_questions, topic'),
     ])
+
+  const boardScopedChapters = (chapters || []).filter((chapter: any) => !boardId || !chapter.board_id || chapter.board_id === boardId)
+  // Chapter language represents the student's curriculum medium. Do not use the
+  // subject's AI/output language here: Gujarati-medium English/Hindi chapters
+  // still belong to the Gujarati curriculum and must count toward progress.
+  const visibleChapters = boardScopedChapters.filter((chapter: any) => {
+    const chapterMedium = normalizeMedium(chapter.language || 'en')
+    return chapterMedium === normalizeMedium(medium) || (!chapter.language && normalizeMedium(medium) === 'en')
+  })
 
   const completedChapterIds = new Set(
     (progress || []).filter((p: any) => p.is_completed).map((p: any) => p.chapter_id)
@@ -236,7 +245,7 @@ export async function getStudentProgressOverview(
   // Group chapters by subject, in order, building each chapter's mastery
   // node for the Learning Journey Map + Weak Concept Indicator cards.
   const chaptersBySubject = new Map<string, any[]>()
-  ;(chapters || []).forEach((ch: any) => {
+  ;(visibleChapters || []).forEach((ch: any) => {
     const list = chaptersBySubject.get(ch.subject_id) || []
     list.push(ch)
     chaptersBySubject.set(ch.subject_id, list)

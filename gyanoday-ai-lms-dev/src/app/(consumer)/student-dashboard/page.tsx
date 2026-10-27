@@ -21,12 +21,13 @@ export default function StudentDashboard() {
   const setProgressStats = useCourseProgressStore((state) => state.setStats)
 
   const { data: subjectsData, isLoading: isSubjectsLoading } = useQuery({
-    queryKey: ['student-subjects', user?.language, user?.class_id],
+    queryKey: ['student-subjects', user?.language, user?.class_id, user?.board_id],
     queryFn: () =>
       subjectService.getSubjects({
         // Subjects are shared across mediums — filter by the *chapters'* language.
         chapterLanguage: user?.language || 'en',
         classFilter: user?.class_id, // Add class filter
+        boardFilter: user?.board_id || null,
         statusFilter: true,
         pageSize: 100,
         isAdmin: false,
@@ -36,11 +37,11 @@ export default function StudentDashboard() {
 
   // Fetch Progress
   const { data: progressData, isLoading: isLoadingProgress } = useQuery({
-    queryKey: ['student-progress', user?.id, user?.class_id, user?.language, subjectsData?.data],
+    queryKey: ['student-progress', user?.id, user?.class_id, user?.language, user?.board_id, subjectsData?.data],
     queryFn: async () => {
       if (!user?.id || !subjectsData?.data || !user?.class_id) return {}
       const subjectIds = subjectsData.data.map((s) => s.id)
-      return await chapterService.getSubjectProgress(user.id, subjectIds, user.class_id, user.language || 'en')
+      return await chapterService.getSubjectProgress(user.id, subjectIds, user.class_id, user.language || 'en', user.board_id || null)
     },
     enabled: !!user?.id && !!subjectsData?.data?.length && !!user?.class_id,
   })

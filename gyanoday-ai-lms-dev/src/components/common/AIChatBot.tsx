@@ -38,11 +38,12 @@ export function AIChatBot() {
   const [isReadingImage, setIsReadingImage] = useState(false)
 
   const chapterId = activeChapter?.id || 'general'
+  const chatKey = `${user?.id || 'guest'}:${chapterId}`
   const language = activeChapter?.language || user?.language || 'en'
 
   // Zustand Store
   const EMPTY_MESSAGES: any[] = []
-  const messages = useChatStore((state) => state.histories[chapterId]) || EMPTY_MESSAGES
+  const messages = useChatStore((state) => state.histories[chatKey]) || EMPTY_MESSAGES
   const addMessage = useChatStore((state) => state.addMessage)
   const appendToMessage = useChatStore((state) => state.appendToMessage)
 
@@ -62,7 +63,7 @@ export function AIChatBot() {
 
   // Initialize chat if empty
   useEffect(() => {
-    const currentMessages = useChatStore.getState().histories[chapterId] || []
+    const currentMessages = useChatStore.getState().histories[chatKey] || []
 
     if (currentMessages.length === 0) {
       const chapterLang = activeChapter?.language || user?.language || 'en'
@@ -71,9 +72,9 @@ export function AIChatBot() {
         role: 'bot' as const,
         content: getWelcomeMessage(chapterLang),
       }
-      addMessage(chapterId, welcomeMsg)
+      addMessage(chatKey, welcomeMsg)
     }
-  }, [chapterId, activeChapter?.language, user?.language, addMessage])
+  }, [chatKey, activeChapter?.language, user?.language, addMessage])
 
   const toggleChat = () => setIsOpen(!isOpen)
 
@@ -104,9 +105,9 @@ export function AIChatBot() {
       // to actually see 2-3 full attempt/hint cycles on the same step and
       // decide when to break Socratic mode and just give the answer,
       // rather than losing that context after a couple of turns.
-      const historyContext = useChatStore.getState().getRecentContext(chapterId, 12)
+      const historyContext = useChatStore.getState().getRecentContext(chatKey, 12)
 
-      addMessage(chapterId, userMessage)
+      addMessage(chatKey, userMessage)
 
       if (!activeChapter?.id) {
         // No PDF-backed chapter — keep the old lightweight fallback, no
@@ -124,7 +125,7 @@ export function AIChatBot() {
       // this is what makes the answer feel "typed live" instead of
       // appearing all at once after a wait.
       const botMessage = createBotMessage('')
-      addMessage(chapterId, botMessage)
+      addMessage(chatKey, botMessage)
       setIsTyping(true)
 
       try {
@@ -168,13 +169,13 @@ export function AIChatBot() {
             streamFailed = true
             const [beforeError, errorMsg] = chunk.split(STREAM_ERROR_MARKER)
             if (beforeError) {
-              appendToMessage(chapterId, botMessage.id, beforeError)
+              appendToMessage(chatKey, botMessage.id, beforeError)
               streamedText += beforeError
             }
             const finalErrorMsg = errorMsg?.trim() || CHATBOT_GENERAL_ERROR
             if (!streamedText.trim()) {
               // Nothing useful streamed before the failure — surface the error.
-              appendToMessage(chapterId, botMessage.id, finalErrorMsg)
+              appendToMessage(chatKey, botMessage.id, finalErrorMsg)
             }
             // Logged here too (in addition to the server-side log this
             // request already produced) so the actual failure reason is
@@ -195,7 +196,7 @@ export function AIChatBot() {
             setIsTyping(false)
           }
 
-          appendToMessage(chapterId, botMessage.id, chunk)
+          appendToMessage(chatKey, botMessage.id, chunk)
           streamedText += chunk
         }
 
@@ -204,12 +205,12 @@ export function AIChatBot() {
         // otherwise this double-appends the generic message right after
         // the real one.
         if (!streamFailed && !streamedText.trim()) {
-          appendToMessage(chapterId, botMessage.id, CHATBOT_GENERAL_ERROR)
+          appendToMessage(chatKey, botMessage.id, CHATBOT_GENERAL_ERROR)
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : CHATBOT_GENERAL_ERROR
         console.error('[AIChatBot] Failed to fetch/stream chatbot response:', error)
-        appendToMessage(chapterId, botMessage.id, errorMsg)
+        appendToMessage(chatKey, botMessage.id, errorMsg)
         toast({ variant: 'destructive', title: t('common.ui.error', 'Error'), description: errorMsg })
       } finally {
         setIsTyping(false)
@@ -217,7 +218,7 @@ export function AIChatBot() {
     },
     addBotMessage: (content: string) => {
       const botMessage = createBotMessage(content)
-      addMessage(chapterId, botMessage)
+      addMessage(chatKey, botMessage)
     },
   }
 

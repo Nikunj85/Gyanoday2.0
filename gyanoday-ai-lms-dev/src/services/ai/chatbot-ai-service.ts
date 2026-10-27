@@ -15,6 +15,9 @@ export interface ChatbotVariables extends Record<string, string | undefined> {
   history?: string // Legacy support
 }
 
+/** Chapters whose PDF yields no searchable text (scanned). Skips file_search for them until restart. */
+const chaptersWithoutSearchableText = new Set<string>()
+
 export const chatbotAiService = {
   /**
    * Generates an answer using a chapter ID, reusing the file_id if it exists.
@@ -46,7 +49,7 @@ export const chatbotAiService = {
     }
 
     // 2. Build prompt
-    const prompt = buildPrompt(promptType, setting.value, processedVariables)
+    const prompt = buildPrompt(promptType, setting.value, processedVariables) + languageEnforcement(languageLabel(processedVariables.language), 'text')
     // 3. Get file_id and generate answer
     try {
       // Attempt to get existing file_id or upload if missing
@@ -96,13 +99,12 @@ export const chatbotAiService = {
     // vector-store cache being fixed to actually persist (see
     // chapter-server-service.ts), is most of what "time to first token"
     // was going toward.
-    const [chapter, systemSetting, turnSetting, vectorStoreId] = await Promise.all([
+    const [chapter, systemSetting, turnSetting] = await Promise.all([
       prefetchedChapter
         ? Promise.resolve(prefetchedChapter)
         : chapterServerService.getChapterById(chapterId),
       settingsService.getSettingBasedOnKey(PromptKeys.PROMPT_SOCRATIC_TUTOR_SYSTEM),
       settingsService.getSettingBasedOnKey(PromptKeys.PROMPT_CHATBOT_ANSWER),
-      chapterServerService.getOrCreateChapterVectorStoreId(chapterId, false, prefetchedChapter),
     ])
 
     if (!systemSetting || !turnSetting) {
@@ -119,37 +121,87 @@ export const chatbotAiService = {
       class_name: chapter.class?.name || 'this class',
       language: processedVariables.language,
       student_name: processedVariables.student_name,
-    }) + languageEnforcement(languageLabel(processedVariables.language), 'text')
+    }) + languageEnforcement(languageLabel(processedVariables.language), 'text') +
+      `\n\nRESPONSE LANGUAGE POLICY (MANDATORY): The required answer language is ${processedVariables.language}, because this is a ${chapter.subject?.name || 'subject'} chapter. ` +
+      `The student may type the question in English, Hindi, Gujarati or Hinglish (Hindi/Gujarati written in Latin letters) - understand it in any of these, but NEVER use the question's language to choose the answer language. ` +
+      `Always answer in ${processedVariables.language}${processedVariables.language === 'Hindi' ? ' using natural Devanagari script' : processedVariables.language === 'Gujarati' ? ' using natural Gujarati script' : ' using natural English'}, even if the student writes or asks you to switch to another language. ` +
+      `Do not transliterate, and do not produce generic answers unrelated to the retrieved chapter.` +
+      `\n\nRETRIEVAL RULE (MANDATORY): Before answering, search the chapter document. The document is in the chapter's own language, so search using the chapter title and the key topic words of the question translated into that language as well as in English. ` +
+      `Only say the information is missing if the search genuinely returned nothing relevant; broad questions such as "what is the story / summary of this chapter" must be answered from the retrieved passages.`
 
     // DYNAMIC part — only the actual question and conversation history,
     // which genuinely change every turn.
-    const input = buildPrompt(PromptKeys.PROMPT_CHATBOT_ANSWER, turnSetting.value, processedVariables)
+    const input =
+      buildPrompt(PromptKeys.PROMPT_CHATBOT_ANSWER, turnSetting.value, processedVariables) +
+      `\n\n[Context] Chapter: "${chapter.title}" | Subject: ${chapter.subject?.name || ''} | Answer language: ${processedVariables.language}`
 
     // Raw model output — still wrapped in <internal_thought> /
     // <student_facing_response> tags per the system prompt's schema.
     // Uses file_search retrieval (fast — only relevant passages are pulled
     // in) instead of re-reading the entire chapter PDF on every message.
     async function* rawStream(): AsyncGenerator<string> {
-      try {
-        yield* openAIService.streamAnswerUsingFileSearch(vectorStoreId, input, { instructions })
-      } catch (aiError: any) {
-        const errorMessage = aiError?.message || aiError?.toString() || ''
-        if (
-          errorMessage.includes('404') ||
-          errorMessage.includes('vector_store') ||
-          errorMessage.includes('not found')
-        ) {
-          // Vector store missing/expired on OpenAI's side — rebuild once and retry.
-          const newVectorStoreId = await chapterServerService.getOrCreateChapterVectorStoreId(
-            chapterId,
-            true,
-            prefetchedChapter
-          )
-          yield* openAIService.streamAnswerUsingFileSearch(newVectorStoreId, input, { instructions })
-          return
+      const chapterRow = prefetchedChapter || chapter
+      const hadCachedStore = !!chapterRow.vector_store_id
+      let emittedAnyChunk = false
+
+      // Search the chapter index. Returns false when the index has no usable text (stale / failed
+      // index, or a scanned PDF) so the caller can read the PDF file directly instead.
+      async function* searchStore(storeId: string): AsyncGenerator<string> {
+        for await (const chunk of openAIService.streamAnswerUsingFileSearch(storeId, input, { instructions })) {
+          emittedAnyChunk = true
+          yield chunk
         }
-        throw aiError
       }
+
+      if (!chaptersWithoutSearchableText.has(chapterId)) {
+        try {
+          let storeId: string | null = null
+          try {
+            storeId = await chapterServerService.getOrCreateChapterVectorStoreId(chapterId, false, chapterRow)
+          } catch (error) {
+            console.error('[ChatbotAiService] Vector-store setup failed; using direct chapter file:', error)
+          }
+
+          if (storeId) {
+            try {
+              yield* searchStore(storeId)
+              if (emittedAnyChunk) return
+              console.error('[ChatbotAiService] File search returned an empty response; falling back to direct PDF file.')
+            } catch (aiError: any) {
+              if (emittedAnyChunk) throw aiError
+              const message = aiError?.message || String(aiError || '')
+              console.error('[ChatbotAiService] File-search failed:', message)
+              const staleOrEmpty =
+                message === 'FILE_SEARCH_EMPTY' ||
+                message.includes('404') ||
+                message.includes('vector_store') ||
+                message.includes('not found')
+              if (staleOrEmpty && hadCachedStore) {
+                // The saved index may be stale or built from a failed upload: rebuild it once.
+                try {
+                  const refreshedId = await chapterServerService.getOrCreateChapterVectorStoreId(chapterId, true, chapterRow)
+                  yield* searchStore(refreshedId)
+                  if (emittedAnyChunk) return
+                } catch (refreshError: any) {
+                  if (emittedAnyChunk) throw refreshError
+                  console.error('[ChatbotAiService] Rebuilt index also unusable:', refreshError?.message || refreshError)
+                  if (refreshError?.message === 'FILE_SEARCH_EMPTY') chaptersWithoutSearchableText.add(chapterId)
+                }
+              } else if (message === 'FILE_SEARCH_EMPTY') {
+                // Fresh index and still nothing -> the PDF has no extractable text (scanned images).
+                chaptersWithoutSearchableText.add(chapterId)
+              }
+            }
+          }
+        } catch (outer) {
+          if (emittedAnyChunk) throw outer
+        }
+      }
+
+      // Direct read of the PDF (handles scanned / image-only pages as well).
+      const fileId = await chapterServerService.getOrUploadChapterFileId(chapterId, false, chapterRow)
+      const directInput = `${input}\n\nAnswer only from the attached chapter document. If the answer is not present, say so clearly. Reply in ${processedVariables.language}.`
+      yield* openAIService.streamResultFromFileId(fileId, `${instructions}\n\n${directInput}`)
     }
 
     // Filter is applied here, at the single point every streamed answer

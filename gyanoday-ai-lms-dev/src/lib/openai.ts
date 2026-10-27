@@ -44,9 +44,18 @@ export class OpenAIService {
   async createVectorStoreForFile(fileId: string, name: string): Promise<string> {
     const client = this.getClient()
     const store = await client.vectorStores.create({ name })
-    await client.vectorStores.fileBatches.createAndPoll(store.id, {
+    const batch = await client.vectorStores.fileBatches.createAndPoll(store.id, {
       file_ids: [fileId],
     })
+    // createAndPoll resolves even when indexing failed. Do not cache a broken/empty index,
+    // otherwise every later question searches nothing.
+    if (batch.status !== 'completed' || (batch.file_counts?.completed ?? 0) < 1) {
+      console.error('[OpenAI] Vector store indexing did not complete:', batch.status, batch.file_counts)
+      try {
+        await client.vectorStores.delete(store.id)
+      } catch {}
+      throw new Error('VECTOR_STORE_INDEX_FAILED')
+    }
     return store.id
   }
 
@@ -86,6 +95,13 @@ export class OpenAIService {
       // rules out the reply ever being silently cut off mid-thought on a
       // longer turn.
       max_output_tokens: 1500,
+      // Always search the chapter before answering. Without this the model sometimes skips
+      // retrieval (esp. when the question is in a different language from the chapter) and
+      // replies "I couldn't find details in the chapter".
+      tool_choice: 'required',
+      // Return the retrieved passages so we can tell when the search found no real text
+      // (scanned / image-only PDFs have nothing for file_search to index).
+      include: ['file_search_call.results'],
       tools: [
         {
           type: 'file_search',
@@ -102,6 +118,18 @@ export class OpenAIService {
     })
 
     for await (const event of stream) {
+      if (event.type === 'response.output_item.done') {
+        const item: any = (event as any).item
+        if (item?.type === 'file_search_call') {
+          const retrievedChars = (item.results || []).reduce(
+            (sum: number, r: any) => sum + String(r?.text || '').trim().length,
+            0
+          )
+          // Nothing (or only a few stray characters, e.g. a QR code) was retrieved: stop BEFORE
+          // any text is emitted so the caller can fall back to reading the PDF file directly.
+          if (retrievedChars < 200) throw new Error('FILE_SEARCH_EMPTY')
+        }
+      }
       if (event.type === 'response.output_text.delta' && 'delta' in event) {
         yield event.delta as string
       }

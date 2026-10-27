@@ -104,8 +104,8 @@ export async function getAdminStudents(params: {
   let query = supabaseAdmin
     .from('users')
     .select(
-      `id, email, name, role, class_id, language, school_name, phone, is_active, created_at,
-       class:classes(name)`,
+      `id, email, name, role, class_id, board_id, language, school_name, phone, is_active, created_at,
+       class:classes(name), board:boards(name)`,
       { count: 'exact' }
     )
     .eq('role', UserRole.Student)
@@ -200,7 +200,7 @@ export async function searchParentCandidates(search: string, limit = 20) {
 
   let query = supabaseAdmin
     .from('users')
-    .select('id, email, name, role, class_id, language, school_name, phone, is_active, created_at')
+    .select('id, email, name, role, class_id, board_id, language, school_name, phone, is_active, created_at')
     .neq('role', UserRole.Student)
     .neq('role', UserRole.Admin)
     .order('name', { ascending: true })
@@ -223,7 +223,7 @@ export async function searchStudentCandidates(search: string, limit = 20) {
 
   let query = supabaseAdmin
     .from('users')
-    .select('id, email, name, role, class_id, language, school_name, phone, is_active, created_at')
+    .select('id, email, name, role, class_id, board_id, language, school_name, phone, is_active, created_at')
     .eq('role', UserRole.Student)
     .order('name', { ascending: true })
     .limit(Math.min(limit, 50))

@@ -68,13 +68,15 @@ export const useUserStore = create<UserState>((set, get) => ({
           name,
           role,
           class_id,
+          board_id,
           language,
           school_name,
           phone,
           is_active,
           score_summary,
           created_at,
-          class:classes(name)
+          class:classes(name),
+          board:boards(name)
         `
         )
         .eq('id', session.user.id)

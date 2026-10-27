@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { classService } from '@/services/class-service'
+import { boardService, Board } from '@/services/board-service'
 import { Language, LANGUAGE_LABELS, User, UserRole } from '@/types/users'
 
 const formSchema = z.object({
@@ -34,6 +35,7 @@ const formSchema = z.object({
   }),
   role: z.nativeEnum(UserRole),
   class_id: z.string().nullable(),
+  board_id: z.string().min(1, 'Please select a board.'),
   language: z.nativeEnum(Language),
   school_name: z.string().min(2, {
     message: 'School name is required.',
@@ -58,6 +60,9 @@ export function StudentForm({
     queryKey: ['classes-list'],
     queryFn: () => classService.getClasses({ page: 1, pageSize: 100 }),
   })
+
+  const { data: boards = [] } = useQuery({ queryKey: ['boards'], queryFn: () => boardService.getAll() })
+  const boardOptions: SelectOption[] = boards.map((b: Board) => ({ value: b.id, label: b.name }))
 
   const classOptions: SelectOption[] = [
     { value: 'none', label: 'No Class' },
@@ -89,6 +94,7 @@ export function StudentForm({
       phone: initialData?.phone || '',
       role: initialData?.role || UserRole.Student,
       class_id: initialData?.class_id || null,
+      board_id: initialData?.board_id || '',
       language: initialData?.language || Language.EN,
       school_name: initialData?.school_name || '',
       is_active: initialData ? !!initialData.is_active : true,
@@ -201,7 +207,7 @@ export function StudentForm({
                 onValueChange={(val) =>
                   formik.setFieldValue('class_id', val === 'none' ? null : val)
                 }
-                options={classOptions}
+                options={classOptions.filter((option) => option.value === 'none' || classesData?.data.some((cls) => String(cls.id) === option.value && cls.board_id === formik.values.board_id && cls.language === formik.values.language))}
                 placeholder="Select class"
                 disabled={isLoadingClasses}
               />
@@ -210,6 +216,10 @@ export function StudentForm({
 
           {/* Academic Group */}
           <div className="grid grid-cols-1 gap-4 pt-2">
+            <div className="grid gap-1">
+              <Label className="admin-label">Board</Label>
+              <AdminSelect value={formik.values.board_id || ''} onValueChange={(val) => { formik.setFieldValue('board_id', val); formik.setFieldValue('class_id', null) }} options={boardOptions} placeholder="Select board" />
+            </div>
             <div className="grid gap-1">
               <Label className="admin-label">Language</Label>
               <AdminSelect

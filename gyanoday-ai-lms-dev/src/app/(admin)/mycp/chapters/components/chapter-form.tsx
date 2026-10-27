@@ -17,6 +17,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { classService } from '@/services/class-service'
+import { boardService, Board } from '@/services/board-service'
 import { subjectService } from '@/services/subject-service'
 import { Chapter } from '@/types'
 import { Language, LANGUAGE_LABELS } from '@/types/users'
@@ -36,6 +37,7 @@ const formSchema = z
     is_visible: z.boolean(),
     subject_id: z.string().min(1, { message: 'Subject is required.' }),
     class_id: z.string().min(1, { message: 'Class is required.' }),
+    board_id: z.string().nullable().optional(),
     language: z.string().min(1, { message: 'Language is required.' }),
     pdf_url: z.string().optional(),
     video_url: z.string().optional(),
@@ -82,6 +84,7 @@ export function ChapterForm({
       is_visible: chapter?.is_visible ?? true,
       subject_id: chapter?.subject_id || '',
       class_id: chapter?.class_id || '',
+      board_id: chapter?.board_id || null,
       language: chapter?.language || Language.EN,
       pdf_url: chapter?.pdf_url || '',
       video_url: chapter?.video_url || '',
@@ -113,6 +116,9 @@ export function ChapterForm({
     queryFn: () => classService.getClasses({ page: 1, pageSize: 100 }),
   })
 
+  const { data: boards = [] } = useQuery({ queryKey: ['boards'], queryFn: () => boardService.getAll() })
+  const boardOptions: SelectOption[] = [{ value: 'none', label: 'No board' }, ...boards.map((b: Board) => ({ value: b.id, label: b.name }))]
+
   const languageOptions: SelectOption[] = Object.values(Language).map((lang) => ({
     value: lang,
     label: LANGUAGE_LABELS[lang],
@@ -129,6 +135,7 @@ export function ChapterForm({
         is_visible: chapter.is_visible,
         subject_id: chapter.subject_id,
         class_id: chapter.class_id,
+        board_id: chapter.board_id || null,
         language: chapter.language,
         pdf_url: chapter.pdf_url || '',
         video_url: chapter.video_url || '',
@@ -336,6 +343,11 @@ export function ChapterForm({
             </div>
 
             <div className="grid gap-2">{/* Empty space */}</div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="board_id" className="admin-label">Board</Label>
+              <AdminSelect value={formik.values.board_id || 'none'} onValueChange={(val) => formik.setFieldValue('board_id', val === 'none' ? null : val, true)} options={boardOptions} placeholder="Select a board" />
+            </div>
 
             <div className="grid gap-2">
               <Label htmlFor="class_id" className="admin-label">

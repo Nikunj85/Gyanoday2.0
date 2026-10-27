@@ -1,10 +1,9 @@
-import { languageEnforcement, resolveContentLanguage } from '@/lib/ai/language'
+import { languageEnforcement, resolveStudentContentLanguage } from '@/lib/ai/language'
 import { buildPrompt } from '@/lib/ai/promptUtils'
 import { McqQuestionSchema, McqSchema } from '@/lib/constants/mcq_keys'
 import { PromptKeys } from '@/lib/constants/prompt_keys'
 import { openAIService } from '@/lib/openai'
 import { supabaseAdmin } from '@/lib/supabase/admin'
-import { IncrementalJsonArrayExtractor } from '@/lib/utils/incremental-json-array-extractor'
 
 import { chapterServerService } from '../chapter-server-service'
 import { quizServerService } from '../quiz-server-service'
@@ -12,14 +11,12 @@ import { settingsService } from '../settings-server-service'
 
 async function getGenerationLanguage(
   userId: string | undefined,
-  chapterLanguage?: string | null,
   subjectLanguage?: string | null,
   subjectName?: string | null
 ) {
-  // Chapter / subject language is authoritative (see lib/ai/language.ts).
-  // The student's medium is only a last-resort fallback.
+  // The student's medium controls ordinary subjects; language subjects keep their own language.
   let fallbackLanguage: string | null = null
-  if (!chapterLanguage && !subjectLanguage && userId) {
+  if (userId) {
     const { data } = await supabaseAdmin
       .from('users')
       .select('language')
@@ -28,7 +25,7 @@ async function getGenerationLanguage(
     fallbackLanguage = data?.language || null
   }
 
-  return resolveContentLanguage({ chapterLanguage, subjectLanguage, subjectName, fallbackLanguage })
+  return resolveStudentContentLanguage(fallbackLanguage || 'en', subjectName, subjectLanguage)
 }
 
 /**
@@ -46,6 +43,13 @@ function composeMcqPrompt(template: string, variables: Record<string, string>) {
   }
 
   prompt += languageEnforcement(variables.language as any, 'json')
+  if (variables.language === 'Hindi') {
+    prompt += '\n\nSCRIPT VALIDATION: Write every question, every option, every explanation, and student_profile_summary in natural Hindi using Devanagari (हिन्दी). Latin-letter gibberish or Hindi transliteration is invalid. Use only chapter facts; if the source text is unreadable, do not invent questions.'
+  } else if (variables.language === 'Gujarati') {
+    prompt += '\n\nSCRIPT VALIDATION: Write every question, every option, every explanation, and student_profile_summary in natural Gujarati using Gujarati script (ગુજરાતી). Latin-letter gibberish or Gujarati transliteration is invalid. Use only chapter facts; if the source text is unreadable, do not invent questions.'
+  } else {
+    prompt += '\n\nWrite natural, grammatical English. Every question and option must be meaningful and directly supported by the chapter. Do not output random letters or corrupted text.'
+  }
   return prompt
 }
 
@@ -107,7 +111,7 @@ export const mcqAiService = {
       settingsService.getSettingBasedOnKey(PromptKeys.PROMPT_MCQ_GENERATOR),
       settingsService.getSettingBasedOnKey(PromptKeys.TOTAL_QUESTION_PER_TEST),
       buildStudentProfile(userId, chapterId),
-      getGenerationLanguage(userId, chapter.language, subject?.language, subject?.name),
+      getGenerationLanguage(userId, subject?.language, subject?.name),
     ])
 
     const variables = {
@@ -165,13 +169,25 @@ export const mcqAiService = {
         .eq('id', chapter.subject_id)
         .maybeSingle()
 
-      const [vectorStoreId, promptSetting, questionCountSetting, studentProfile, generationLanguage] = await Promise.all([
-        chapterServerService.getOrCreateChapterVectorStoreId(chapterId, false, chapter),
+      const fileId = await chapterServerService.getOrUploadChapterFileId(chapterId, false, chapter)
+      const chapterWithFile = { ...chapter, file_id: fileId }
+      let vectorStoreId: string | null = null
+      try {
+        vectorStoreId = await chapterServerService.getOrCreateChapterVectorStoreId(chapterId, false, chapterWithFile)
+      } catch (vectorStoreError) {
+        // The original PDF file is still usable even if vector indexing/cache setup fails.
+        console.error('[McqAiService] Vector-store setup failed; quiz will use the PDF directly:', vectorStoreError)
+      }
+      const [promptSetting, questionCountSetting, studentProfile, generationLanguage] = await Promise.all([
         settingsService.getSettingBasedOnKey(PromptKeys.PROMPT_MCQ_GENERATOR),
         settingsService.getSettingBasedOnKey(PromptKeys.TOTAL_QUESTION_PER_TEST),
         buildStudentProfile(userId, chapterId),
-        getGenerationLanguage(userId, chapter.language, subject?.language, subject?.name),
+        getGenerationLanguage(userId, subject?.language, subject?.name),
       ])
+      if (!promptSetting?.value) {
+        yield { type: 'error', message: 'Quiz generation is not configured. Ask the administrator to add PROMPT_MCQ_GENERATOR in Settings.' }
+        return
+      }
 
       const variables = {
         language: generationLanguage,
@@ -182,45 +198,86 @@ export const mcqAiService = {
 
       const prompt = composeMcqPrompt(promptSetting.value, variables)
 
-      const extractor = new IncrementalJsonArrayExtractor('questions')
-      let fullBuffer = ''
-      const seenQuestionIds = new Set<unknown>()
+      let validated: any = null
+      let lastError = 'The generated quiz was malformed. Please try again.'
 
-      for await (const chunk of openAIService.streamStructuredUsingFileSearch(
-        vectorStoreId,
-        prompt,
-        McqSchema,
-        'mcq_questions'
-      )) {
-        fullBuffer += chunk
-        const newQuestions = extractor.push(chunk)
-        for (const q of newQuestions) {
-          const parsed = McqQuestionSchema.safeParse(q)
-          if (parsed.success && !seenQuestionIds.has(parsed.data.id)) {
-            seenQuestionIds.add(parsed.data.id)
-            yield { type: 'question', data: parsed.data }
+      // Never stream unvalidated questions to the learner. A malformed or wrong-script
+      // first attempt is discarded and regenerated once with the same chapter and language.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        let fullBuffer = ''
+        const retryPrompt = attempt === 0
+          ? prompt
+          : `${prompt}\n\nFINAL RETRY: Previous output was unusable. Generate clean, meaningful ${generationLanguage} content in the correct native script. Do not transliterate. Ensure each question is directly grounded in this chapter.`
+
+        try {
+          if (attempt === 0 && vectorStoreId) {
+            for await (const chunk of openAIService.streamStructuredUsingFileSearch(
+              vectorStoreId,
+              retryPrompt,
+              McqSchema,
+              'mcq_questions'
+            )) {
+              fullBuffer += chunk
+            }
+          } else {
+            // Retry through the original PDF file directly. This avoids repeating a
+            // bad/empty vector-store retrieval when the first result is unusable.
+            const directResult = await openAIService.generateResultWithSchema({
+              fileId,
+              prompt: retryPrompt,
+              schema: McqSchema,
+              schemaName: 'mcq_questions',
+            })
+            fullBuffer = JSON.stringify(directResult)
           }
+        } catch (generationError) {
+          lastError = generationError instanceof Error ? generationError.message : lastError
+          continue
         }
+
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(fullBuffer)
+        } catch {
+          lastError = 'The generated quiz was not valid JSON.'
+          continue
+        }
+
+        const result = McqSchema.safeParse(parsed)
+        if (!result.success) {
+          lastError = 'The generated quiz did not match the required question format.'
+          continue
+        }
+
+        const learnerText = result.data.questions
+          .map((q) => [q.question, q.options.A, q.options.B, q.options.C, q.options.D, q.explanation].join(' '))
+          .join(' ')
+        const letters = learnerText.match(/[\p{L}]/gu) || []
+        const targetScript = generationLanguage === 'Hindi'
+          ? (learnerText.match(/[\u0900-\u097F]/g) || []).length
+          : generationLanguage === 'Gujarati'
+            ? (learnerText.match(/[\u0A80-\u0AFF]/g) || []).length
+            : (learnerText.match(/[A-Za-z]/g) || []).length
+        const minimumScriptRatio = generationLanguage === 'English' ? 0.35 : 0.2
+        if (letters.length > 0 && targetScript / letters.length < minimumScriptRatio) {
+          lastError = `The AI returned quiz text in the wrong script for ${generationLanguage}. Please try again.`
+          continue
+        }
+
+        validated = result.data
+        break
       }
 
-      // Final authoritative parse — this is what's actually used for
-      // metadata (difficulty, pass criteria context) and as the source of
-      // truth, even though individual questions were already revealed above.
-      let finalResult: unknown
-      try {
-        finalResult = JSON.parse(fullBuffer)
-      } catch {
-        yield { type: 'error', message: 'Failed to parse the generated quiz. Please try again.' }
+      if (!validated) {
+        yield { type: 'error', message: lastError }
         return
       }
 
-      const validated = McqSchema.safeParse(finalResult)
-      if (!validated.success) {
-        yield { type: 'error', message: 'The generated quiz was malformed. Please try again.' }
-        return
+      for (const question of validated.questions) {
+        const questionCheck = McqQuestionSchema.safeParse(question)
+        if (questionCheck.success) yield { type: 'question', data: questionCheck.data }
       }
-
-      yield { type: 'done', data: { ...validated.data, topic: topic || null } }
+      yield { type: 'done', data: { ...validated, topic: topic || null } }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to generate the quiz.'
       yield { type: 'error', message }

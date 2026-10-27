@@ -10,6 +10,7 @@ export const classService = {
     search = '',
     statusFilter = null as boolean | null,
     languageFilter = 'all' as string,
+    boardFilter = 'all' as string,
   }) {
     const from = (page - 1) * pageSize
     const to = from + pageSize - 1
@@ -21,6 +22,8 @@ export const classService = {
         order_num,
         is_active,
         language,
+        board_id,
+        board:boards(name),
         created_at,
         updated_at,
         students:users(count)
@@ -39,6 +42,7 @@ export const classService = {
     if (languageFilter !== 'all') {
       query = query.eq('language', languageFilter)
     }
+    if (boardFilter !== 'all') query = query.eq('board_id', boardFilter)
 
     const { data, error, count } = await query
       .range(from, to)

@@ -28,6 +28,7 @@ export interface User {
   name: string
   role: UserRole
   class_id: string | null // FK → classes.id
+  board_id?: string | null // FK → boards.id
   language: Language
   school_name: string
   phone: string
@@ -35,4 +36,5 @@ export interface User {
   score_summary?: string | ScoreSummary | null // AI generated summary (JSON string of ScoreSummary or the object itself)
   created_at: string // ISO timestamp
   class?: { name: string } // Join reference
+  board?: { name: string } | null
 }

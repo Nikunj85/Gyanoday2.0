@@ -1,6 +1,6 @@
 'use server'
 
-import { chapterLanguageFilter, getEquivalentClassIds } from '@/lib/class-utils'
+import { getEquivalentClassIds, normalizeMedium } from '@/lib/class-utils'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { UserRole } from '@/types/users'
@@ -161,7 +161,7 @@ export async function getChildProgressSummary(studentId: string): Promise<ChildP
 
   const { data: studentData, error: studentError } = await supabaseAdmin
     .from('users')
-    .select('id, name, class_id, language')
+    .select('id, name, class_id, board_id, language')
     .eq('id', studentId)
     .maybeSingle()
   if (studentError) throw studentError
@@ -176,17 +176,16 @@ export async function getChildProgressSummary(studentId: string): Promise<ChildP
       .limit(50),
     supabaseAdmin
       .from('user_chapter_progress')
-      .select('is_completed, completed_at', { count: 'exact' })
+      .select('chapter_id, is_completed, completed_at', { count: 'exact' })
       .eq('user_id', studentId)
       .eq('is_completed', true),
     studentData.class_id
       ? supabaseAdmin
           .from('chapters')
-          .select('id', { count: 'exact', head: true })
+          .select('id, language, board_id, subject:subjects(name)')
           .in('class_id', await getEquivalentClassIds(supabaseAdmin, studentData.class_id))
-          .or(chapterLanguageFilter(studentData.language))
           .eq('is_visible', true)
-      : Promise.resolve({ count: 0 }),
+      : Promise.resolve({ data: [], error: null } as any),
     supabaseAdmin
       .from('ai_insights')
       .select('*, chapter:chapters(title)')
@@ -197,6 +196,7 @@ export async function getChildProgressSummary(studentId: string): Promise<ChildP
   // Surface real query failures instead of silently rendering zeros.
   if (attemptsRes.error) throw attemptsRes.error
   if (progressRes.error) throw progressRes.error
+  if ((chaptersCountRes as any).error) throw (chaptersCountRes as any).error
 
   const attempts = attemptsRes.data || []
   const totalAttempts = attempts.length
@@ -241,8 +241,16 @@ export async function getChildProgressSummary(studentId: string): Promise<ChildP
     ...((progressRes.data as any[]) || []).map((p) => p.completed_at).filter(Boolean),
   ])
 
-  const totalChaptersCount = chaptersCountRes.count || 0
-  const completedCount = progressRes.count || 0
+  // chapters.language is the curriculum medium, so match on the student's medium
+  // (not the subject's own language, which would hide English/Hindi in Gujarati medium).
+  const studentMedium = normalizeMedium(studentData.language)
+  const relevantChapters = ((chaptersCountRes as any).data || []).filter((chapter: any) => {
+    if (studentData.board_id && chapter.board_id && chapter.board_id !== studentData.board_id) return false
+    return normalizeMedium(chapter.language || 'en') === studentMedium
+  })
+  const relevantChapterIds = new Set(relevantChapters.map((chapter: any) => chapter.id))
+  const totalChaptersCount = relevantChapters.length
+  const completedCount = ((progressRes.data as any[]) || []).filter((row) => relevantChapterIds.has(row.chapter_id)).length
   const completionRatio = totalChaptersCount > 0 ? completedCount / totalChaptersCount : 0
   const consistent = currentStreakDays >= 3 || Math.round(weeklyStudyMinutes) >= 60
 
@@ -262,8 +270,8 @@ export async function getChildProgressSummary(studentId: string): Promise<ChildP
     studentName: studentData.name || 'Student',
     averageScorePct,
     totalAttempts,
-    chaptersCompleted: progressRes.count || 0,
-    totalChapters: chaptersCountRes.count || 0,
+    chaptersCompleted: completedCount,
+    totalChapters: totalChaptersCount,
     weeklyStudyMinutes: Math.round(weeklyStudyMinutes),
     currentStreakDays,
     weakAreas: Array.from(weakAreasSet).slice(0, 5),
@@ -276,6 +284,10 @@ export async function getChildProgressSummary(studentId: string): Promise<ChildP
  */
 export async function generateChildParentSummary(studentId: string, language: string = 'en') {
   await assertParentOfStudent(studentId)
+
+  const { data: childProfile, error: childProfileError } = await supabaseAdmin.from('users').select('language').eq('id', studentId).maybeSingle()
+  if (childProfileError) throw childProfileError
+  const studentLanguage = childProfile?.language || language || 'en'
 
   const supabase = await createClient()
   const {
@@ -301,7 +313,7 @@ export async function generateChildParentSummary(studentId: string, language: st
 
   const summary  = await userSummaryAiService.generateParentSummary(
     performanceData,
-    language,
+    studentLanguage,
     progress.studentName,
     parentProfile?.name || undefined
   )

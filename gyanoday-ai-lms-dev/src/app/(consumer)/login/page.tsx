@@ -142,13 +142,15 @@ export default function LoginPage() {
             name,
             role,
             class_id,
+            board_id,
             language,
             school_name,
             phone,
             is_active,
             score_summary,
             created_at,
-            class:classes(name)
+            class:classes(name),
+            board:boards(name)
           `
           )
           .eq('id', authData.user.id)

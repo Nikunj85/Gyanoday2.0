@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Class } from '@/types'
+import { boardService, Board } from '@/services/board-service'
+import { useQuery } from '@tanstack/react-query'
 import { Language, LANGUAGE_LABELS } from '@/types/users'
 
 const formSchema = z.object({
@@ -19,6 +21,7 @@ const formSchema = z.object({
   order_num: z.coerce.number().min(0),
   is_active: z.boolean(),
   language: z.string().min(1, 'Please select a language'),
+  board_id: z.string().min(1, 'Please select a board.'),
 })
 
 type ClassFormValues = z.infer<typeof formSchema>
@@ -38,6 +41,8 @@ export function ClassForm({
   isSubmitting = false,
   existingClasses = [],
 }: ClassFormProps) {
+  const { data: boards = [] } = useQuery({ queryKey: ['boards'], queryFn: () => boardService.getAll() })
+  const boardOptions: SelectOption[] = boards.map((b: Board) => ({ value: b.id, label: b.name }))
   const statusOptions: SelectOption[] = [
     { value: 'true', label: 'Active' },
     { value: 'false', label: 'Inactive' },
@@ -54,6 +59,7 @@ export function ClassForm({
       order_num: initialData?.order_num || 0,
       is_active: initialData ? !!initialData.is_active : true,
       language: initialData?.language || Language.EN,
+      board_id: initialData?.board_id || '',
     },
     validate: (values) => {
       const result = formSchema.safeParse(values)
@@ -73,11 +79,12 @@ export function ClassForm({
         (cls) =>
           cls.name.toLowerCase() === values.name.toLowerCase() &&
           cls.language === values.language &&
+          cls.board_id === values.board_id &&
           cls.id !== initialData?.id
       )
 
       if (isDuplicate) {
-        errors.name = `A class with name "${values.name}" already exists in ${LANGUAGE_LABELS[values.language as Language]}. Please use a different name or language.`
+        errors.name = `A class with name "${values.name}" already exists for this board in ${LANGUAGE_LABELS[values.language as Language]}. Please use a different name or language.`
       }
 
       return errors
@@ -129,6 +136,10 @@ export function ClassForm({
           </div>
 
           <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-1">
+              <Label className="admin-label">Board</Label>
+              <AdminSelect value={formik.values.board_id || ''} onValueChange={(val) => formik.setFieldValue('board_id', val)} options={boardOptions} placeholder="Select board" />
+            </div>
             <div className="grid gap-1">
               <Label className="admin-label">Language</Label>
               <AdminSelect

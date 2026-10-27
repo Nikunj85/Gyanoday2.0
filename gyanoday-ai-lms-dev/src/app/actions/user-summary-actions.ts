@@ -46,7 +46,7 @@ export async function generateStudentOverallSummary(
     // 3. Calculate performance metrics and generate AI summary in parallel
     const [performance, aiSummaryResult] = await Promise.all([
       studentPerformanceService.calculatePerformance(userId, userData.class_id, supabase),
-      userSummaryAiService.generateOverallSummary(insights, language, studentName),
+      userSummaryAiService.generateOverallSummary(insights, userData.language || language, userData.name || studentName),
     ])
 
     const summaryData: ScoreSummary = {

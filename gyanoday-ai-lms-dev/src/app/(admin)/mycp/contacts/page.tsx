@@ -3,7 +3,8 @@
 import { useQuery } from '@tanstack/react-query'
 import debounce from 'lodash.debounce'
 import { Filter, MessageCircle, Search } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from '@/components/ui/use-toast'
 
 import { getContactRequestsAction } from '@/app/actions/contact-actions'
 import { AdminSelect, SelectOption } from '@/components/common/admin-select'
@@ -41,12 +42,22 @@ export default function ContactsPage() {
         search: debouncedSearch,
       }),
     placeholderData: (previousData) => previousData,
+    refetchInterval: 30000,
   })
 
   // Normalize data from Server Action response
   const contacts = data?.data || []
   const totalItems = data?.total || 0
   const totalPages = Math.ceil(totalItems / pageSize)
+  const newestContactId = contacts[0]?.id as string | undefined
+  const previousNewestId = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (!newestContactId) return
+    if (previousNewestId.current && previousNewestId.current !== newestContactId) {
+      toast({ title: 'New student message received', description: 'A new inquiry has been saved in Contacts.' })
+    }
+    previousNewestId.current = newestContactId
+  }, [newestContactId])
 
   const pageSizeOptions: SelectOption[] = [
     { value: '10', label: '10' },

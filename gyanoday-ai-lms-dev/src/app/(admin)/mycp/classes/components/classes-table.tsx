@@ -39,6 +39,7 @@ export function ClassesTable({
             <TableRow className="hover:bg-transparent border-none">
               <TableHead className="admin-table-header w-[50px]"></TableHead>
               <TableHead className="admin-table-header">Class Name</TableHead>
+              <TableHead className="admin-table-header">Board</TableHead>
               <TableHead className="admin-table-header">Language</TableHead>
               <TableHead className="admin-table-header text-center">Order</TableHead>
               <TableHead className="admin-table-header text-center">Status</TableHead>
@@ -48,7 +49,7 @@ export function ClassesTable({
           <TableBody>
             {[...Array(5)].map((_, i) => (
               <TableRow key={i} className="admin-table-row">
-                <TableCell className="admin-table-cell py-4" colSpan={6}>
+                <TableCell className="admin-table-cell py-4" colSpan={7}>
                   <div className="h-6 w-full animate-shimmer rounded-lg" />
                 </TableCell>
               </TableRow>
@@ -81,6 +82,7 @@ export function ClassesTable({
                 <TableRow className="hover:bg-transparent border-none">
                   <TableHead className="admin-table-header w-[50px]"></TableHead>
                   <TableHead className="admin-table-header">Class Name</TableHead>
+                  <TableHead className="admin-table-header">Board</TableHead>
                   <TableHead className="admin-table-header">Language</TableHead>
                   <TableHead className="admin-table-header text-center">Order</TableHead>
                   <TableHead className="admin-table-header text-center">Status</TableHead>
@@ -104,6 +106,9 @@ export function ClassesTable({
                         </TableCell>
                         <TableCell className="admin-table-cell py-4 font-medium text-foreground">
                           {cls.name}
+                        </TableCell>
+                        <TableCell className="admin-table-cell py-4 text-xs text-muted-foreground font-medium">
+                          {cls.board?.name || '—'}
                         </TableCell>
                         <TableCell className="admin-table-cell py-4 text-xs text-muted-foreground font-medium">
                           <div className="flex items-center">

@@ -218,6 +218,16 @@ function ProfileContent() {
                           </div>
                         </div>
 
+                        {/* Education Board Field (Read-only) */}
+                        <div className="space-y-2">
+                          <label className="text-primary dark:text-primary-hover font-semibold text-lg">
+                            {t('common.profile_page.board', 'Education Board')}
+                          </label>
+                          <div className="border-b-2 border-[#D1C7E8] dark:border-neutral-800 pb-1 text-neutral-500 dark:text-neutral-400 font-semibold text-lg min-h-[44px] flex items-center bg-transparent">
+                            {user?.board?.name || t('common.profile_page.messages.na')}
+                          </div>
+                        </div>
+
                         {/* Class Field (Read-only) */}
                         <div className="space-y-2">
                           <label className="text-primary dark:text-primary-hover font-semibold text-lg">

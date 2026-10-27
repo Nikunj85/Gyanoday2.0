@@ -12,6 +12,8 @@ import { Label } from '@/components/ui/label'
 import { Subject } from '@/types/subjects'
 import { Language } from '@/types/users'
 import { LANGUAGE_LABELS } from '@/types/users'
+import { useQuery } from '@tanstack/react-query'
+import { boardService, Board } from '@/services/board-service'
 
 const subjectSchema = z.object({
   name: z
@@ -19,6 +21,7 @@ const subjectSchema = z.object({
     .min(1, 'Subject name is required')
     .min(2, 'Subject name must be at least 2 characters'),
   language: z.string().min(1, 'Please select a language'),
+  board_id: z.string().nullable().optional(),
   order_num: z.coerce.number().min(0, 'Order must be at least 0'),
   is_active: z.boolean(),
   image_url: z.string().optional(),
@@ -40,6 +43,8 @@ export const SubjectForm = ({
   onDelete,
   isSubmitting = false,
 }: SubjectFormProps) => {
+  const { data: boards = [] } = useQuery({ queryKey: ['boards'], queryFn: () => boardService.getAll() })
+  const boardOptions: SelectOption[] = [{ value: 'none', label: 'No board' }, ...boards.map((b: Board) => ({ value: b.id, label: b.name }))]
   const languageOptions: SelectOption[] = Object.values(Language).map((lang) => ({
     value: lang,
     label: LANGUAGE_LABELS[lang],
@@ -54,6 +59,7 @@ export const SubjectForm = ({
     initialValues: {
       name: initialData?.name || '',
       language: initialData?.language || Language.EN,
+      board_id: initialData?.board_id || null,
       order_num: initialData?.order_num || 0,
       is_active: initialData ? !!initialData.is_active : true,
       image_url: initialData?.image_url || '',
@@ -98,6 +104,10 @@ export const SubjectForm = ({
           </div>
 
           <div className="grid grid-cols-1 gap-4">
+            <div className="grid gap-1">
+              <Label className="admin-label">Board</Label>
+              <AdminSelect value={formik.values.board_id || 'none'} onValueChange={(val) => formik.setFieldValue('board_id', val === 'none' ? null : val)} options={boardOptions} placeholder="Select board" />
+            </div>
             <div className="grid gap-1">
               <Label className="admin-label">Language</Label>
               <AdminSelect

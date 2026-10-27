@@ -76,7 +76,17 @@ export function languageEnforcement(
   language: ContentLanguage,
   kind: 'json' | 'json-generic' | 'text' = 'text'
 ): string {
-  if (language === 'English') return ''
+  if (language === 'English') {
+    // Explicit rule: an English subject must stay English even for a Gujarati/Hindi-medium
+    // student (and even when the question or the student profile is in another language).
+    const englishBase =
+      `\n\nLANGUAGE RULE (STRICT): Write every piece of user-facing text in English only. ` +
+      `Do NOT use Gujarati, Hindi or any other script, and do not translate into the student's medium or into the language of the question.`
+    if (kind === 'json' || kind === 'json-generic') {
+      return englishBase + ` The output is JSON: keep every JSON key name exactly as specified and write every string VALUE in English.`
+    }
+    return englishBase
+  }
 
   const script = SCRIPT_NAME[language]
   const base =
@@ -110,12 +120,10 @@ export function languageEnforcement(
  */
 export function summaryFormatInstruction(language: ContentLanguage): string {
   return (
-    `\n\nOUTPUT FORMAT (STRICT): Return ONLY a bullet list, with no introduction, no heading and no closing line. ` +
-    `Write 5 to 7 bullets. Each bullet must be on its own line and start with "- ". ` +
-    `Start every bullet with a short key term or idea in **bold**, then a colon and one simple sentence of at most 25 words ` +
-    `that a student can revise quickly (for example: "- **Main idea**: ..."). ` +
-    `Cover, in order: what the chapter is about, the key people / events / concepts, the main message or lesson, and what to remember for exams. ` +
-    `Everything, including the bold key terms, must be written in ${language}.`
+    `\n\nOUTPUT FORMAT (STRICT): Return ONLY 3 to 4 concise bullet points, with no heading, introduction, or closing line. ` +
+    `Each bullet must be on its own line and start with "- ". Each bullet should contain one short, student-friendly sentence. ` +
+    `Cover the chapter's main idea, important concepts/events, and what to remember for revision. ` +
+    `Everything, including any key terms, must be written in ${language}.`
   )
 }
 
@@ -133,4 +141,56 @@ export function normalizeBulletSummary(raw: string): string {
     .map((line) => line.replace(/^([•●▪◦*–—]|\d+[.)])\s*/, '- ').replace(/^-(?!\s)/, '- '))
     .map((line) => (line.startsWith('- ') ? line : `- ${line}`))
     .join('\n')
+}
+
+/**
+ * Student-facing language policy: ordinary subjects use the student's medium;
+ * language subjects always use their own language (English/Hindi/Gujarati).
+ */
+export function resolveStudentContentLanguage(
+  studentMedium: string | null | undefined,
+  subjectName: string | null | undefined,
+  subjectLanguage?: string | null
+): ContentLanguage {
+  // Named language subjects always keep their own language, regardless of the
+  // student's medium. This is deliberately checked before the student's medium.
+  const subject = languageFromSubjectName(subjectName)
+  if (subject) return subject
+  const normalizedName = (subjectName || '').trim().toLowerCase()
+  if (/^english(?:\s|$)/i.test(normalizedName) || normalizedName === 'eng') return 'English'
+
+  // Some schools use generic names (e.g. "Second Language") but set the
+  // subject's language column. Only Hindi/Gujarati override the medium here;
+  // an ordinary subject marked English should still follow the student's medium.
+  const configuredSubjectLanguage = subjectLanguage ? languageLabel(subjectLanguage) : null
+  if (configuredSubjectLanguage === 'Hindi' || configuredSubjectLanguage === 'Gujarati') {
+    return configuredSubjectLanguage
+  }
+
+  // The chapter's stored language is not used for ordinary subjects: student
+  // medium controls Maths, Science, Social Science, etc.
+  return languageLabel(studentMedium)
+}
+
+
+/** Short code (en / hi / gu) for a ContentLanguage label. */
+export function contentLanguageKey(language: ContentLanguage): 'en' | 'hi' | 'gu' {
+  return language === 'Hindi' ? 'hi' : language === 'Gujarati' ? 'gu' : 'en'
+}
+
+/**
+ * Looks at the script of some generated text and reports whether it is written in the
+ * expected language. Used to reject cached / freshly generated content that is in the wrong
+ * language (e.g. Gujarati smart notes stored for an English subject).
+ * Pure function - safe to import from client components.
+ */
+export function textMatchesLanguage(value: unknown, expected: ContentLanguage): boolean {
+  const text = typeof value === 'string' ? value : JSON.stringify(value ?? '')
+  const gujarati = (text.match(/[\u0A80-\u0AFF]/g) || []).length
+  const devanagari = (text.match(/[\u0900-\u097F]/g) || []).length
+  const latin = (text.match(/[A-Za-z]/g) || []).length
+  // JSON keys / LaTeX / option letters are Latin, so use generous thresholds.
+  if (expected === 'Gujarati') return gujarati > 0 && gujarati >= devanagari && gujarati * 3 >= latin * 0.25
+  if (expected === 'Hindi') return devanagari > 0 && devanagari >= gujarati && devanagari * 3 >= latin * 0.25
+  return gujarati + devanagari <= (gujarati + devanagari + latin) * 0.03
 }

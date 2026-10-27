@@ -40,6 +40,7 @@ export const SubjectsTable = ({
               <TableHead className="admin-table-header w-[50px]"></TableHead>
               <TableHead className="admin-table-header w-[70px]">Image</TableHead>
               <TableHead className="admin-table-header">Subject Name</TableHead>
+              <TableHead className="admin-table-header">Board</TableHead>
               <TableHead className="admin-table-header">Language</TableHead>
               <TableHead className="admin-table-header text-center">Order</TableHead>
               <TableHead className="admin-table-header text-center">Status</TableHead>
@@ -49,7 +50,7 @@ export const SubjectsTable = ({
           <TableBody>
             {[...Array(5)].map((_, i) => (
               <TableRow key={i} className="admin-table-row">
-                <TableCell className="admin-table-cell py-4" colSpan={7}>
+                <TableCell className="admin-table-cell py-4" colSpan={8}>
                   <div className="h-6 w-full animate-shimmer rounded-lg" />
                 </TableCell>
               </TableRow>
@@ -83,6 +84,7 @@ export const SubjectsTable = ({
                   <TableHead className="admin-table-header w-[50px]"></TableHead>
                   <TableHead className="admin-table-header w-[70px]">Image</TableHead>
                   <TableHead className="admin-table-header">Subject Name</TableHead>
+                  <TableHead className="admin-table-header">Board</TableHead>
                   <TableHead className="admin-table-header">Language</TableHead>
                   <TableHead className="admin-table-header text-center">Order</TableHead>
                   <TableHead className="admin-table-header text-center">Status</TableHead>
@@ -145,6 +147,9 @@ export const SubjectsTable = ({
                         </TableCell>
                         <TableCell className="admin-table-cell py-4 font-semibold text-foreground">
                           {subject.name}
+                        </TableCell>
+                        <TableCell className="admin-table-cell py-4 text-xs text-muted-foreground">
+                          {subject.board?.name || '—'}
                         </TableCell>
                         <TableCell className="admin-table-cell py-4">
                           <div className="flex items-center text-xs text-muted-foreground mr-1.5 h-3 w-3">

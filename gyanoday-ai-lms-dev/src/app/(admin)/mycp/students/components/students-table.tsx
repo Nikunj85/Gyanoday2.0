@@ -31,6 +31,8 @@ export function StudentsTable({ users, onEdit, onDelete, isLoading }: StudentsTa
               <TableHead className="admin-table-header">Name</TableHead>
               <TableHead className="admin-table-header">Email</TableHead>
               <TableHead className="admin-table-header">Class</TableHead>
+              <TableHead className="admin-table-header">Board</TableHead>
+              <TableHead className="admin-table-header">Language</TableHead>
               <TableHead className="admin-table-header text-center">Status</TableHead>
               <TableHead className="admin-table-header text-right">Actions</TableHead>
             </TableRow>
@@ -38,7 +40,7 @@ export function StudentsTable({ users, onEdit, onDelete, isLoading }: StudentsTa
           <TableBody>
             {[...Array(5)].map((_, i) => (
               <TableRow key={i} className="admin-table-row">
-                <TableCell className="admin-table-cell py-4" colSpan={5}>
+                <TableCell className="admin-table-cell py-4" colSpan={7}>
                   <div className="h-6 w-full animate-shimmer rounded-lg" />
                 </TableCell>
               </TableRow>
@@ -69,6 +71,7 @@ export function StudentsTable({ users, onEdit, onDelete, isLoading }: StudentsTa
             <TableHead className="admin-table-header">Name</TableHead>
             <TableHead className="admin-table-header">Contact & Details</TableHead>
             <TableHead className="admin-table-header">Class & School</TableHead>
+            <TableHead className="admin-table-header">Board</TableHead>
             <TableHead className="admin-table-header">Language</TableHead>
             <TableHead className="admin-table-header text-center">Status</TableHead>
             <TableHead className="admin-table-header text-right">Actions</TableHead>
@@ -99,6 +102,9 @@ export function StudentsTable({ users, onEdit, onDelete, isLoading }: StudentsTa
                     <School className="mr-1 h-2.5 w-2.5" /> {user.school_name || 'N/A'}
                   </div>
                 </div>
+              </TableCell>
+              <TableCell className="admin-table-cell py-4">
+                <span className="text-xs font-medium text-muted-foreground">{user.board?.name || '—'}</span>
               </TableCell>
               <TableCell className="admin-table-cell py-4">
                 <div className="flex items-center text-xs text-muted-foreground">
