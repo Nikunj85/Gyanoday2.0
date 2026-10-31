@@ -122,6 +122,7 @@ export async function getWeeklyStreak(userId: string) {
         isFuture,
         status: isFuture ? 'future' : matchedRule?.key || 'missed',
         gif: isFuture ? '' : matchedRule?.gif || '',
+        emoji: isFuture ? '' : matchedRule?.emoji || '',
         color: isFuture ? '#a1a1aa' : matchedRule?.color || '#EF4444',
         label: isFuture
           ? 'Future'

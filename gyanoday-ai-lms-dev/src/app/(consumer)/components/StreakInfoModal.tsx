@@ -10,6 +10,8 @@ import { useLanguage } from '@/providers/language-provider'
 import { StreakRule } from '@/types'
 import { Language } from '@/types/users'
 
+import { StreakEmoji } from './StreakEmoji'
+
 import timer from '../../../../public/timer.png'
 
 interface StreakInfoModalProps {
@@ -74,13 +76,7 @@ export function StreakInfoModal({ isOpen, onClose, rules }: StreakInfoModalProps
                       style={{ backgroundColor: `${rule.color}15` }}
                     >
                       <div className="relative w-full h-full">
-                        <Image
-                          src={rule.gif}
-                          alt={rule.emoji_name}
-                          fill
-                          className="object-contain"
-                          unoptimized
-                        />
+                        <StreakEmoji gif={rule.gif} emoji={rule.emoji} alt={rule.emoji_name} />
                       </div>
                     </div>
                     <div className="flex-1">

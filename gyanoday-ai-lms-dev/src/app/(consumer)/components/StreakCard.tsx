@@ -9,6 +9,8 @@ import { cn } from '@/lib/utils'
 import { useLanguage } from '@/providers/language-provider'
 import { StreakDayData } from '@/types'
 
+import { StreakEmoji } from './StreakEmoji'
+
 import timer from '../../../../public/timer.png'
 
 export function StreakCard({ item }: { item: StreakDayData }) {
@@ -78,9 +80,9 @@ export function StreakCard({ item }: { item: StreakDayData }) {
           )}
 
           {/* Emoji / GIF */}
-          {item.gif ? (
+          {item.gif || item.emoji ? (
             <div className="relative w-17 h-17 sm:w-12 sm:h-12 md:w-16 md:h-17 lg:w-12 lg:h-12 xl:w-13 xl:h-13 2xl:w-16 2xl:h-16 shrink-0">
-              <Image src={item.gif} alt={item.status} fill className="object-contain" unoptimized />
+              <StreakEmoji gif={item.gif} emoji={item.emoji} alt={item.status} />
             </div>
           ) : item.isToday ? (
             <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center shrink-0">
@@ -187,9 +189,7 @@ export function StreakCard({ item }: { item: StreakDayData }) {
               style={{ top: '10%', boxShadow: '0 0 0 2px white' }}
             >
               <div className="relative w-full h-full rounded-full flex items-center justify-center">
-                {item.gif && (
-                  <Image src={item.gif} alt="emoji" fill className="object-contain" unoptimized />
-                )}
+                <StreakEmoji gif={item.gif} emoji={item.emoji} alt={item.status} />
               </div>
             </div>
 

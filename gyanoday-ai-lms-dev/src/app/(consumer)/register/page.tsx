@@ -52,7 +52,26 @@ export default function RegisterPage() {
   const searchParams = useSearchParams()
   const [error, setError] = useState<string | null>(null)
   // Validation messages are i18n keys; translate at render so they follow the chosen medium.
-  const tr = (m?: string) => (m ? t(m, { defaultValue: m }) : '')
+  // English fallbacks: the English locale file has no entry for these keys, which made the form show
+  // the raw key (e.g. "common.auth.errors.phone_exists"). Hindi/Gujarati text still comes from i18n.
+  const AUTH_ERROR_DEFAULTS: Record<string, string> = {
+    'common.auth.errors.name_min': 'Name must be at least 2 characters',
+    'common.auth.errors.name_chars': 'Name can only contain letters, spaces, dots and hyphens',
+    'common.auth.errors.email_invalid': 'Please enter a valid email address',
+    'common.auth.errors.phone_invalid': 'Please enter a valid 10-digit Indian mobile number',
+    'common.auth.errors.pw_min': 'Password must be at least 8 characters',
+    'common.auth.errors.pw_upper': 'Password must contain at least one uppercase letter (A-Z)',
+    'common.auth.errors.pw_lower': 'Password must contain at least one lowercase letter (a-z)',
+    'common.auth.errors.pw_number': 'Password must contain at least one number',
+    'common.auth.errors.pw_special': 'Password must contain at least one special character',
+    'common.auth.errors.school_required': 'School name is required',
+    'common.auth.errors.school_long': 'School name is too long',
+    'common.auth.errors.class_required': 'Please select your class',
+    'common.auth.errors.email_exists': 'An account with this email already exists. Please log in instead.',
+    'common.auth.errors.phone_exists':
+      'This phone number is already registered with another account. Please use a different number or log in.',
+  }
+  const tr = (m?: string) => (m ? t(m, { defaultValue: AUTH_ERROR_DEFAULTS[m] ?? m }) : '')
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [checkingSession, setCheckingSession] = useState(true)
@@ -211,9 +230,20 @@ export default function RegisterPage() {
           email: data.email,
           password: data.password || '',
           options: {
+            // Where the confirmation link in the email sends the student back to. Must be listed under
+            // Supabase > Authentication > URL Configuration > Redirect URLs. NEXT_PUBLIC_SITE_URL wins so a
+            // link opened on another device still points at the real site instead of this machine's localhost.
+            emailRedirectTo: `${(process.env.NEXT_PUBLIC_SITE_URL || window.location.origin).replace(/\/$/, '')}/auth/callback?next=/dashboard`,
             data: {
               name: data.name,
               role: UserRole.Student,
+              // Saved with the account so the profile exists even before the email is confirmed
+              // (no session yet, so the profile update below cannot be written until login).
+              phone: data.phone,
+              school_name: data.school_name,
+              class_id: data.class_id,
+              board_id: data.board_id,
+              language: data.language,
             },
           },
         })
@@ -323,8 +353,14 @@ export default function RegisterPage() {
                 'Registration successful! A confirmation email has been sent to {{email}}. Please confirm your email before logging in.',
               email: data.email,
             })
+          // On a developer machine the confirmation link points at "localhost", which only opens on
+          // THIS computer. Opening it on a phone shows "This site can't be reached".
+          const isLocalHost = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+          const localNote = isLocalHost
+            ? ' (Testing locally: open the confirmation link in the browser on this same computer, not on your phone.)'
+            : ''
           const loginUrl = new URL('/login', window.location.origin)
-          loginUrl.searchParams.set('message', message)
+          loginUrl.searchParams.set('message', message + localNote)
           if (next) loginUrl.searchParams.set('next', next)
           router.push(loginUrl.pathname + loginUrl.search)
         }

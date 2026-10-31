@@ -9,6 +9,11 @@ import { useToast } from '@/components/ui/use-toast'
 import { useOCR } from '@/hooks/useOCR'
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition'
 import { useSpeechSynthesis } from '@/hooks/useSpeechSynthesis'
+import {
+  contentLanguageKey,
+  detectSpeechLanguage,
+  resolveStudentContentLanguage,
+} from '@/lib/ai/language'
 import { cn } from '@/lib/utils'
 import {
   CHATBOT_GENERAL_ERROR,
@@ -240,11 +245,32 @@ export function AIChatBot() {
   }
 
   // --- Voice output ---
+  // The voice follows the language the ANSWER is written in (the subject's language), not the
+  // student's medium: English / Hindi / Gujarati subjects are read in English / Hindi / Gujarati.
+  const subjectName = (activeChapter as any)?.subject?.name as string | undefined
+  const subjectSpeechLanguage = contentLanguageKey(
+    resolveStudentContentLanguage(user?.language || 'en', subjectName || '')
+  )
+
   const handleSpeakClick = (messageId: string, content: string) => {
     if (speakingId === messageId) {
       stopSpeaking()
-    } else {
-      speak(messageId, content, language)
+      return
+    }
+    // The script of the text itself decides first (so the Gujarati welcome message is still read
+    // in Gujarati inside an English subject); Latin text falls back to the subject language.
+    const speechLanguage = detectSpeechLanguage(content, subjectSpeechLanguage)
+    const result = speak(messageId, content, speechLanguage)
+    if (result === 'no-voice') {
+      const name = speechLanguage === 'hi' ? 'Hindi' : speechLanguage === 'gu' ? 'Gujarati' : 'English'
+      toast({
+        title: t('common.ui.voice_missing_title', `${name} voice not found`),
+        description: t(
+          'common.ui.voice_missing_desc',
+          `This device has no ${name} text-to-speech voice installed. Install the ${name} language/voice in your device or browser settings (Chrome and Edge include Hindi online voices) and try again.`
+        ),
+        variant: 'destructive',
+      })
     }
   }
 

@@ -76,6 +76,7 @@ export interface StreakDayData {
   date: number
   status: string
   gif?: string
+  emoji?: string
   color?: string
   isToday?: boolean
   isFuture?: boolean

@@ -3,6 +3,9 @@ import ReactMarkdown from 'react-markdown'
 import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
+import 'katex/contrib/mhchem' // enables \ce{...} chemical formulas / equations
+
+import { normalizeMathMarkdown } from '@/lib/utils/markdown-math'
 
 import { cn } from '@/lib/utils'
 
@@ -115,7 +118,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
           hr: () => <hr className="my-4 border-gray-200 dark:border-gray-700" />,
         }}
       >
-        {content}
+        {normalizeMathMarkdown(content)}
       </ReactMarkdown>
     </div>
   )

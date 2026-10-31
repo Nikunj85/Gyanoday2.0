@@ -15,6 +15,27 @@ export interface ChatbotVariables extends Record<string, string | undefined> {
   history?: string // Legacy support
 }
 
+/**
+ * Questions about the WHOLE chapter (summary, overview, story, "explain this chapter"...) in
+ * English / Hindi / Gujarati / Hinglish. A keyword search can't retrieve "the whole chapter",
+ * so these are answered from the full PDF instead of a handful of retrieved passages.
+ */
+const WHOLE_CHAPTER_PATTERN = new RegExp(
+  [
+    'summar', 'overview', 'recap', 'revis', 'gist', 'in short', 'short me', 'short mein',
+    '(whole|entire|full|complete|poora|pura|puri|pure)\\s+(chapter|lesson|paath|path)',
+    '(explain|samjh|samajh|batao|bata)\\w*\\s+(the\\s+|this\\s+|is\\s+|ye\\s+|yeh\\s+)?(chapter|lesson|paath|path)\\b',
+    '(chapter|lesson|paath)\\s+(ka|ki|ke|nu|na)\\b', 'about (this|the) chapter', 'story', 'kahani', 'kahaani',
+    'saransh', 'sar\\s?ansh', 'sankshep', 'सारांश', 'संक्षेप', 'पूरा', 'पूरे', 'कहानी', 'अध्याय का',
+    'સારાંશ', 'સાર\\b', 'આખો', 'પૂરો', 'વાર્તા', 'પાઠનો',
+  ].join('|'),
+  'i'
+)
+
+export function isWholeChapterQuestion(question: string | undefined): boolean {
+  return !!question && WHOLE_CHAPTER_PATTERN.test(question)
+}
+
 /** Chapters whose PDF yields no searchable text (scanned). Skips file_search for them until restart. */
 const chaptersWithoutSearchableText = new Set<string>()
 
@@ -127,7 +148,11 @@ export const chatbotAiService = {
       `Always answer in ${processedVariables.language}${processedVariables.language === 'Hindi' ? ' using natural Devanagari script' : processedVariables.language === 'Gujarati' ? ' using natural Gujarati script' : ' using natural English'}, even if the student writes or asks you to switch to another language. ` +
       `Do not transliterate, and do not produce generic answers unrelated to the retrieved chapter.` +
       `\n\nRETRIEVAL RULE (MANDATORY): Before answering, search the chapter document. The document is in the chapter's own language, so search using the chapter title and the key topic words of the question translated into that language as well as in English. ` +
-      `Only say the information is missing if the search genuinely returned nothing relevant; broad questions such as "what is the story / summary of this chapter" must be answered from the retrieved passages.`
+      `Only say the information is missing if the search genuinely returned nothing relevant; broad questions such as "what is the story / summary of this chapter" must be answered from the retrieved passages.` +
+      `\n\nACCESS RULE (MANDATORY): The chapter document is available to you in this conversation. NEVER say that you do not have access to the chapter or its content; if a detail is truly absent from it, say that only that specific detail is not covered in this chapter and help with what is covered.` +
+      `\n\nMATH & CHEMISTRY FORMATTING (MANDATORY): Write math as LaTeX inside $...$ (inline) or $$...$$ (own line). ` +
+      `Write EVERY chemical formula and chemical equation with mhchem inside $...$ or $$...$$, e.g. $$\\ce{2H2 + O2 -> 2H2O}$$, $\\ce{CO2}$, $\\ce{H2SO4}$, $$\\ce{CaCO3 ->[\\Delta] CaO + CO2 ^}$$, with state symbols such as $\\ce{NaCl(aq)}$ and reversible reactions written with <=>. ` +
+      `Always balance equations and put each important equation on its own line. Never write equations as plain text such as H2O or H2 + O2 -> H2O, never use Unicode subscripts, and never put equations in code blocks.`
 
     // DYNAMIC part — only the actual question and conversation history,
     // which genuinely change every turn.
@@ -153,7 +178,9 @@ export const chatbotAiService = {
         }
       }
 
-      if (!chaptersWithoutSearchableText.has(chapterId)) {
+      const wholeChapter = isWholeChapterQuestion(processedVariables.question)
+
+      if (!wholeChapter && !chaptersWithoutSearchableText.has(chapterId)) {
         try {
           let storeId: string | null = null
           try {
@@ -200,7 +227,10 @@ export const chatbotAiService = {
 
       // Direct read of the PDF (handles scanned / image-only pages as well).
       const fileId = await chapterServerService.getOrUploadChapterFileId(chapterId, false, chapterRow)
-      const directInput = `${input}\n\nAnswer only from the attached chapter document. If the answer is not present, say so clearly. Reply in ${processedVariables.language}.`
+      const wholeChapterNote = wholeChapter
+        ? `\n\nThe student is asking about the WHOLE chapter. Read the entire attached document and give a complete, well-structured answer (main ideas in order, key terms, people/events or concepts, and any formulas/equations). Do not say you lack access.`
+        : ''
+      const directInput = `${input}${wholeChapterNote}\n\nAnswer only from the attached chapter document. If a specific detail is not present, say only that detail is not covered. Reply in ${processedVariables.language}.`
       yield* openAIService.streamResultFromFileId(fileId, `${instructions}\n\n${directInput}`)
     }
 

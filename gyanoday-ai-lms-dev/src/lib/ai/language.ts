@@ -194,3 +194,22 @@ export function textMatchesLanguage(value: unknown, expected: ContentLanguage): 
   if (expected === 'Hindi') return devanagari > 0 && devanagari >= gujarati && devanagari * 3 >= latin * 0.25
   return gujarati + devanagari <= (gujarati + devanagari + latin) * 0.03
 }
+/**
+ * Language a piece of text should be READ ALOUD in.
+ * The script of the text itself wins (Gujarati / Devanagari letters can only be one language),
+ * so a Gujarati-medium student hearing an English-subject answer gets an English voice and an
+ * English-medium student hearing a Hindi-subject answer gets a Hindi voice. For Latin text the
+ * subject's language (`fallback`) decides; it defaults to English.
+ */
+export function detectSpeechLanguage(
+  text: string,
+  fallback: 'en' | 'hi' | 'gu' = 'en'
+): 'en' | 'hi' | 'gu' {
+  const gujarati = (text.match(/[\u0A80-\u0AFF]/g) || []).length
+  const devanagari = (text.match(/[\u0900-\u097F]/g) || []).length
+  const latin = (text.match(/[A-Za-z]/g) || []).length
+  if (gujarati === 0 && devanagari === 0) return 'en' // plain Latin text is read in English
+  if (gujarati > devanagari && gujarati * 2 >= latin * 0.25) return 'gu'
+  if (devanagari >= gujarati && devanagari * 2 >= latin * 0.25) return 'hi'
+  return fallback
+}
