@@ -9,6 +9,8 @@ import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+// Supabase allows one auth e-mail per address every ~60 seconds.
+const COOLDOWN_SECONDS = 60
 
 export default function ForgotPasswordPage() {
   const { t } = useTranslation()
@@ -19,6 +21,7 @@ export default function ForgotPasswordPage() {
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [cooldown, setCooldown] = useState(0)
 
   // The callback sends people back here with ?message=... when a reset link was invalid/expired.
   useEffect(() => {
@@ -26,8 +29,15 @@ export default function ForgotPasswordPage() {
     if (message) setNotice(message)
   }, [])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // Counts the wait down so the button can't be spammed (every click would be another 429).
+  useEffect(() => {
+    if (cooldown <= 0) return
+    const timer = setTimeout(() => setCooldown((s) => s - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [cooldown])
+
+  const sendLink = async () => {
+    if (isLoading || cooldown > 0) return
     setError(null)
 
     const trimmed = email.trim().toLowerCase()
@@ -48,21 +58,39 @@ export default function ForgotPasswordPage() {
       })
 
       if (resetError) {
-        const rateLimited = /rate|seconds|too many/i.test(resetError.message)
-        setError(
-          rateLimited
-            ? t('common.auth.reset.rate_limited', {
-                defaultValue: 'Too many requests. Please wait a minute and try again.',
-              })
-            : t('common.auth.reset.send_failed', {
-                defaultValue: "We couldn't send the reset link right now. Please try again.",
-              })
-        )
+        const err = resetError as any
+        const message = String(err?.message || '')
+        const isRateLimited = err?.status === 429 || /rate limit|too many|after \d+ seconds/i.test(message)
+
+        if (isRateLimited) {
+          // "...you can only request this after 42 seconds" -> short wait; "email rate limit exceeded" -> hourly cap.
+          const secondsMatch = message.match(/after (\d+) seconds/i)
+          const hourlyCap = err?.code === 'over_email_send_rate_limit' || /email rate limit/i.test(message)
+
+          setCooldown(secondsMatch ? Number(secondsMatch[1]) : COOLDOWN_SECONDS)
+          setError(
+            hourlyCap
+              ? t('common.auth.reset.email_limit', {
+                  defaultValue:
+                    'Too many emails have been sent recently. Please try again after some time, or contact support.',
+                })
+              : t('common.auth.reset.rate_limited', {
+                  defaultValue: 'Too many requests. Please wait a minute and try again.',
+                })
+          )
+        } else {
+          setError(
+            t('common.auth.reset.send_failed', {
+              defaultValue: "We couldn't send the reset link right now. Please try again.",
+            })
+          )
+        }
         return
       }
 
       // Same message whether or not the email has an account (does not reveal who is registered).
       setSent(true)
+      setCooldown(COOLDOWN_SECONDS)
     } catch {
       setError(
         t('common.auth.login.unexpected_error', {
@@ -73,6 +101,16 @@ export default function ForgotPasswordPage() {
       setIsLoading(false)
     }
   }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    void sendLink()
+  }
+
+  const waitLabel = t('common.auth.reset.resend_in', {
+    defaultValue: 'Try again in {{seconds}}s',
+    seconds: cooldown,
+  })
 
   return (
     <div className="relative flex min-h-[calc(100vh-200px)] items-center justify-center overflow-hidden p-4 py-5 selection:bg-secondary selection:text-primary md:py-16">
@@ -101,13 +139,31 @@ export default function ForgotPasswordPage() {
         )}
 
         {sent ? (
-          <div className="space-y-6">
+          <div className="space-y-5">
             <div className="rounded-lg bg-green-50 p-4 text-sm font-medium text-green-700 dark:bg-green-900/20 dark:text-green-400">
               {t('common.auth.reset.sent', {
                 defaultValue:
                   'If an account exists for this email, a password reset link has been sent. Please check your inbox (and the spam folder).',
               })}
             </div>
+
+            {error && (
+              <div className="rounded-lg bg-red-50 p-3 text-sm font-medium text-red-600 dark:bg-red-900/20 dark:text-red-400">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => void sendLink()}
+              disabled={isLoading || cooldown > 0}
+              className="w-full text-center text-sm font-semibold text-primary hover:underline disabled:cursor-not-allowed disabled:text-neutral-400 disabled:no-underline"
+            >
+              {cooldown > 0
+                ? waitLabel
+                : t('common.auth.reset.send_again', { defaultValue: "Didn't get it? Send again" })}
+            </button>
+
             <Link
               href="/login"
               className="flex h-12 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-bold text-white shadow-lg shadow-primary/25 transition-all hover:bg-primary/90"
@@ -143,12 +199,14 @@ export default function ForgotPasswordPage() {
             )}
 
             <button
-              disabled={isLoading}
+              disabled={isLoading || cooldown > 0}
               type="submit"
               className="flex h-12 w-full cursor-pointer items-center justify-center rounded-xl bg-primary px-4 py-3.5 text-sm font-bold text-white shadow-lg shadow-primary/25 transition-all hover:bg-primary/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isLoading ? (
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              ) : cooldown > 0 ? (
+                waitLabel
               ) : (
                 t('common.auth.reset.send_link', { defaultValue: 'Send reset link' })
               )}
