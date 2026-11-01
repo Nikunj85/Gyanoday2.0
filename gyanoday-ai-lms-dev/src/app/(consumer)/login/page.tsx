@@ -160,7 +160,8 @@ export default function LoginPage() {
           console.error('Login error: User profile not found in users table', userError)
           setError(
             t('common.auth.login.profile_not_found', {
-              defaultValue: 'User profile not found. Please contact support.',
+              defaultValue:
+                'This account no longer exists (it may have been deleted). Please create a new account or contact support.',
             })
           )
           await supabase.auth.signOut()
@@ -281,6 +282,14 @@ export default function LoginPage() {
               {errors.password && (
                 <p className="mt-1.5 text-xs font-medium text-red-500">{errors.password.message}</p>
               )}
+              <div className="mt-2 text-right">
+                <Link
+                  href="/forgot-password"
+                  className="text-sm font-semibold text-primary hover:underline"
+                >
+                  {t('common.auth.reset.forgot_link', { defaultValue: 'Forgot password?' })}
+                </Link>
+              </div>
             </div>
 
             {error && (

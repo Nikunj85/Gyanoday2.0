@@ -212,6 +212,7 @@ export default function RegisterPage() {
         const { emailExists, phoneExists } = await checkUserExists({
           email: data.email,
           phone: data.phone,
+          cleanupOrphan: true,
         })
 
         if (emailExists || phoneExists) {

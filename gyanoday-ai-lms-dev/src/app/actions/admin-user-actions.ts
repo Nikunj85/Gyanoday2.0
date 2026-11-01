@@ -187,6 +187,16 @@ export async function deleteAdminStudent(id: string) {
     throw new Error('Only student accounts can be deleted here.')
   }
 
+  // Delete the Supabase Auth login FIRST. public.users.id references auth.users(id) ON DELETE CASCADE,
+  // so this also removes the profile and all of the student's progress. Deleting only the profile row
+  // used to leave an orphan login behind: the student could still "sign in" (then got "profile not found")
+  // and could not register again with the same email (Auth said it already existed).
+  const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(id)
+  if (authDeleteError && !/not.?found/i.test(authDeleteError.message || '')) {
+    throw new Error(`Could not delete the student's login: ${authDeleteError.message}`)
+  }
+
+  // Safety net: if there was no Auth user (an older orphan) or the cascade is missing, remove the row too.
   const { error } = await supabaseAdmin.from('users').delete().eq('id', id)
   if (error) throw error
   return true

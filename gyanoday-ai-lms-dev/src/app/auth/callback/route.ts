@@ -36,6 +36,14 @@ export async function GET(request: Request) {
   // Supabase can send the user back with an error (expired / already-used link).
   const providerError = searchParams.get('error_description') || searchParams.get('error')
   if (providerError && !code && !tokenHash) {
+    if (next.startsWith('/reset-password')) {
+      const url = new URL('/forgot-password', baseUrl)
+      url.searchParams.set(
+        'message',
+        'This password reset link is invalid or has expired. Please request a new one.'
+      )
+      return NextResponse.redirect(url.toString())
+    }
     return toLogin(
       'This confirmation link is invalid or has expired. If you already confirmed your email, please log in; otherwise register again.'
     )
@@ -60,10 +68,26 @@ export async function GET(request: Request) {
     failed = true
   }
 
+  const isPasswordReset = next.startsWith('/reset-password')
+
+  if ((failed || !session) && isPasswordReset) {
+    const url = new URL('/forgot-password', baseUrl)
+    url.searchParams.set(
+      'message',
+      'This password reset link is invalid or has expired. Please request a new one.'
+    )
+    return NextResponse.redirect(url.toString())
+  }
+
   if (failed || !session) {
     // The e-mail itself is usually already confirmed by this point (e.g. the link was opened in
     // another browser, so there is no sign-in cookie). Send the student to log in instead of an error page.
     return toLogin('Your email is confirmed. Please log in to continue.')
+  }
+
+  // Password-reset links always land on the reset form (the recovery session is already active).
+  if (isPasswordReset) {
+    return NextResponse.redirect(`${baseUrl}${next}`)
   }
 
   // Smart Redirection Logic
